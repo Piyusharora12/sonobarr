@@ -31,10 +31,10 @@ The app can:
 
 <p align="center">
   <img src="/src/static/fetch-from-lidarr.png" alt="Fetch from Lidarr" width="100%">
-  <img src="/src/static/bio-detail.png" alt="Bio Detail" width="50%">
-  <img src="/src/static/card-detail.png" alt="Card Detail" width="50%">
-  <img src="/src/static/prehear-detail.png" alt="Prehear Detail" width="50%">
-  <img src="/src/static/settings-detail.png" alt="Settings Detail" width="50%">
+  <img src="/src/static/bio-detail.png" alt="Bio Detail" width="48%">
+  <img src="/src/static/card-detail.png" alt="Card Detail" width="48%">
+  <img src="/src/static/prehear-detail.png" alt="Prehear Detail" width="48%">
+  <img src="/src/static/settings-detail.png" alt="Settings Detail" width="48%">
 </p>  
 
 ---
