@@ -41,15 +41,20 @@ The app can:
 
 ---
 
-## Run using Docker Compose without opening ports 
+## Run using Docker Compose  
 
-_This setup assumes you already use Docker and have a network (for example, with NGINX Proxy Manager). Check the comments in the `docker-compose.yml` file if you prefer a simpler setup with exposed ports (not recommended but entirely functional)._  
+_This setup assumes you already use Docker and have a network (for example, with NGINX Proxy Manager). Check the comments in the `docker-compose.yml` file if you prefer a simpler setup with exposed ports._  
 
 1. Clone this repository  
-2. Edit the `docker-compose.yml` file to match your environment  
-3. Rename `.sample-env` to `.env` and adjust the values as needed  
-4. Run <code>sudo docker compose up -d</code>  
-   - This will **build the image locally** on first run, and then reuse the local image afterwards
+2. Set the ownership of the cloned repo:  
+   `sudo chown -R 1000:1000 sonobarr`  
+3. Move into the cloned repo:  
+   `cd sonobarr`  
+4. Edit the `docker-compose.yml` file to match your environment  
+5. Rename `.sample-env` to `.env` and adjust the values as needed  
+6. Start the container:  
+   `sudo docker compose up -d`  
+   - This will **build the image locally** on the first run, and then reuse the local image afterwards  
 
 ---
 
