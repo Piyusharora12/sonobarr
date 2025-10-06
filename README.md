@@ -4,7 +4,7 @@
   <img src="/src/static/sonobarr.png" alt="Sonobarr Logo">
 </p>
 
-**Sonobarr** is a music discovery tool that integrates with **Lidarr** and provides recommendations using **Last.fm**.  
+**Sonobarr** is a music discovery tool that integrates with [**Lidarr**](https://lidarr.audio) and provides recommendations using [**Last.fm**](https://www.last.fm).  
 
 ---
 
@@ -19,11 +19,12 @@ The app can:
 
 ## Planned Features  
 
-- Sorting options  
-- AI-powered recommendations  
+- Sorting options 
+- More UI settings 
+- AI-powered recommendations using [Deej-A.I.](https://deej-ai.online) or similar
 - Manual artist search  
 - Pre-built Docker image on GitHub Container Registry (GHCR) and/or Docker Hub mirror  
-- …and more to come  
+- …and more  
 
 ---
 
@@ -31,7 +32,7 @@ The app can:
 
 <p align="center">
   <img src="/src/static/fetch-from-lidarr.png" alt="Fetch from Lidarr" width="100%">
-  <img src="/src/static/prehear-detail.png" alt="Prehear Detail" width="48%">
+  <img src="/src/static/prehear-detail.png" alt="Prehear Detail" width="100%">
   <img src="/src/static/bio-detail.png" alt="Bio Detail" width="48%">
   <img src="/src/static/settings-detail.png" alt="Settings Detail" width="48%">
   <img src="/src/static/card-detail.png" alt="Card Detail" width="48%">
@@ -40,9 +41,9 @@ The app can:
 
 ---
 
-## Run using Docker Compose  
+## Run using Docker Compose without opening ports 
 
-_This setup assumes you already use Docker and have a network (for example, with NGINX Proxy Manager). Check the comments in the `docker-compose.yml` file if you prefer a simpler setup with exposed ports._  
+_This setup assumes you already use Docker and have a network (for example, with NGINX Proxy Manager). Check the comments in the `docker-compose.yml` file if you prefer a simpler setup with exposed ports (not recommended but entirely functional)._  
 
 1. Clone this repository  
 2. Edit the `docker-compose.yml` file to match your environment  
@@ -58,10 +59,10 @@ _This setup assumes you already use Docker and have a network (for example, with
 - **PGID** – Group ID (default: `1000`)  
 - **lidarr_address** – Lidarr URL (default: `http://192.168.1.1:8686`)  
 - **lidarr_api_key** – API key for Lidarr  
-- **root_folder_path** – Music root folder path (default: `/data/media/music/`)  
+- **root_folder_path** – Music root folder path (default: `/data/media/music/`). See [here](https://github.com/Dodelidoo-Labs/sonobarr/issues/2) how to find this path.  
 - **fallback_to_top_result** – Use top result if no match is found (default: `False`)  
 - **lidarr_api_timeout** – API timeout in seconds (default: `120`)  
-- **quality_profile_id** – Quality profile ID (default: `1`). See [here]() how to find it.  
+- **quality_profile_id** – Quality profile ID (default: `1`). See [here](https://github.com/Dodelidoo-Labs/sonobarr/issues/1) how to find it.  
 - **metadata_profile_id** – Metadata profile ID (default: `1`)  
 - **search_for_missing_albums** – Start searching when adding artists (default: `False`)  
 - **dry_run_adding_to_lidarr** – Run without adding artists (default: `False`)  

@@ -8,9 +8,9 @@ services:
     volumes:
       - ./config:/sonobarr/config
       - /etc/localtime:/etc/localtime:ro
-      - ./src:/sonobarr/src # only needed if you want to modify the source code
-    #ports: # unless you want to expose the app directly, otherwise use a reverse proxy
-      #- 5000:5000
+      #- ./src:/sonobarr/src # only needed if you want to modify the source code
+    #ports: # uncomment if you want to expose the app directly
+      #- 5000:5000 # uncomment if you want to expose the app directly
     restart: unless-stopped
     environment:
       - last_fm_api_key=${last_fm_api_key}
@@ -19,9 +19,9 @@ services:
       - quality_profile_id=${quality_profile_id}
       - lidarr_api_key=${lidarr_api_key}
       - youtube_api_key=${youtube_api_key}
-    networks: # unless you want to expose the app directly, in which case you will open ports
-      npm_proxy:
-        ipv4_address: 192.168.97.23
+    networks: # comment if you want to expose the app directly, in which case you will open ports
+      npm_proxy: # comment if you want to expose the app directly, in which case you will open ports
+        ipv4_address: 192.168.97.23 # Change to your desired and free IP. Comment if you want to expose the app directly, in which case you will open ports
 
 networks:
     npm_proxy:
