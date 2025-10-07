@@ -15,51 +15,53 @@
 
   {% block title %}Profile · Sonobarr{% endblock %}
 
-  {% block nav_actions %}
+  {% block topbar_actions %}
   <a class="btn btn-outline-light btn-sm" href="{{ url_for('home') }}">Back to app</a>
   {% endblock %}
 
-  {% block content %}
-  <div class="row justify-content-center">
-    <div class="col-12 col-lg-6">
-      <div class="card shadow-sm">
-        <div class="card-body">
-          <h1 class="h4 mb-3">Profile</h1>
-          <form method="post" novalidate>
-            <div class="mb-3">
-              <label for="display_name" class="form-label">Display name</label>
-              <input type="text" class="form-control" id="display_name" name="display_name"
-                value="{{ current_user.display_name or '' }}" placeholder="How you appear in the app">
-            </div>
-            <div class="mb-3">
-              <label for="avatar_url" class="form-label">Profile image URL</label>
-              <input type="url" class="form-control" id="avatar_url" name="avatar_url"
-                value="{{ current_user.avatar_url or '' }}" placeholder="https://example.com/avatar.png">
-              <div class="form-text">PNG/JPEG/SVG URLs work best. Leave empty to use the default icon.</div>
-            </div>
-            <hr>
-            <p class="fw-semibold">Change password</p>
-            <div class="mb-3">
-              <label for="current_password" class="form-label">Current password</label>
-              <input type="password" class="form-control" id="current_password" name="current_password"
-                autocomplete="current-password">
-            </div>
-            <div class="mb-3">
-              <label for="new_password" class="form-label">New password</label>
-              <input type="password" class="form-control" id="new_password" name="new_password"
-                autocomplete="new-password">
-              <div class="form-text">Leave blank to keep your current password. Minimum 8 characters.</div>
-            </div>
-            <div class="mb-3">
-              <label for="confirm_password" class="form-label">Confirm new password</label>
-              <input type="password" class="form-control" id="confirm_password" name="confirm_password"
-                autocomplete="new-password">
-            </div>
-            <div class="d-flex justify-content-end gap-2">
-              <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">Cancel</a>
-              <button type="submit" class="btn btn-primary">Save changes</button>
-            </div>
-          </form>
+  {% block main %}
+  <div class="container py-4">
+    <div class="row justify-content-center">
+      <div class="col-12 col-lg-6">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <h1 class="h4 mb-3">Profile</h1>
+            <form method="post" novalidate>
+              <div class="mb-3">
+                <label for="display_name" class="form-label">Display name</label>
+                <input type="text" class="form-control" id="display_name" name="display_name"
+                  value="{{ current_user.display_name or '' }}" placeholder="How you appear in the app">
+              </div>
+              <div class="mb-3">
+                <label for="avatar_url" class="form-label">Profile image URL</label>
+                <input type="url" class="form-control" id="avatar_url" name="avatar_url"
+                  value="{{ current_user.avatar_url or '' }}" placeholder="https://example.com/avatar.png">
+                <div class="form-text">PNG/JPEG/SVG URLs work best. Leave empty to use the default icon.</div>
+              </div>
+              <hr>
+              <p class="fw-semibold">Change password</p>
+              <div class="mb-3">
+                <label for="current_password" class="form-label">Current password</label>
+                <input type="password" class="form-control" id="current_password" name="current_password"
+                  autocomplete="current-password">
+              </div>
+              <div class="mb-3">
+                <label for="new_password" class="form-label">New password</label>
+                <input type="password" class="form-control" id="new_password" name="new_password"
+                  autocomplete="new-password">
+                <div class="form-text">Leave blank to keep your current password. Minimum 8 characters.</div>
+              </div>
+              <div class="mb-3">
+                <label for="confirm_password" class="form-label">Confirm new password</label>
+                <input type="password" class="form-control" id="confirm_password" name="confirm_password"
+                  autocomplete="new-password">
+              </div>
+              <div class="d-flex justify-content-end gap-2">
+                <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Save changes</button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     </div>
@@ -70,8 +72,6 @@
 </body>
 
 </html>
-          </div>
-        </div>
       </div>
     </div>
   </div>

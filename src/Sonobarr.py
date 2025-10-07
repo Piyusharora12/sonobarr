@@ -411,7 +411,7 @@ class DataHandler:
                     "Name": related_artist.item.name,
                     "Genre": genres,
                     "Status": "",
-                    "Img_Link": img_link or "https://placehold.co/300x200",
+                    "Img_Link": img_link or "https://placehold.co/512x512?text=No+Image",
                     "Popularity": f"Play Count: {self.format_numbers(play_count)}",
                     "Followers": f"Listeners: {self.format_numbers(listeners)}",
                     "SimilarityScore": clamped_similarity,

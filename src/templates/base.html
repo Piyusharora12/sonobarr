@@ -64,24 +64,20 @@
   <div class="sticky-top">
     <div class="container-fluid bg-dark">
       <div class="top-bar d-flex justify-content-between align-items-center">
+        {% block topbar_leading %}
         <button class="btn btn-link text-light" type="button" data-bs-toggle="offcanvas"
           data-bs-target="#lidarr-sidebar" aria-controls="lidarr-sidebar">
           <i class="fa fa-bars fa-2x"></i>
         </button>
+        {% endblock %}
         <h1 class="title text-center text-light flex-grow-1" id="return-to-top">Sonobarr</h1>
         <div class="d-flex align-items-center gap-2">
+          {% block topbar_actions %}
           <button class="btn btn-outline-light btn-sm d-none" id="load-more-btn" type="button">
             Load More
           </button>
           <div class="spinner-border spinner-border-sm text-light d-none" id="artists-loading-spinner" role="status">
             <span class="visually-hidden">Loading...</span>
-          </div>
-          <div class="d-flex align-items-center text-light gap-1" id="theme-toggle-wrapper">
-            <i class="fa fa-sun" aria-hidden="true"></i>
-            <div class="form-check form-switch mb-0">
-              <input class="form-check-input rounded" type="checkbox" id="theme-switch" aria-label="Toggle theme">
-            </div>
-            <i class="fa fa-moon" aria-hidden="true"></i>
           </div>
           {% if current_user.is_authenticated and current_user.is_admin %}
           <button class="btn btn-link text-light" id="settings-button" data-bs-toggle="modal"
@@ -292,7 +288,9 @@
     </div>
   </div>
 
-  <script src="{{url_for('static',filename='script.js')}}"></script>
+  {% block extra_scripts %}
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+  {% endblock %}
 </body>
 
 </html>

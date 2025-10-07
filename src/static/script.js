@@ -661,37 +661,6 @@ socket.on('lastfm_preview', function (preview_info) {
 	}
 });
 
-const theme_switch = document.getElementById('theme-switch');
-if (theme_switch) {
-	const storedTheme = localStorage.getItem('theme');
-	const storedPosition =
-		localStorage.getItem('theme_switch_position') ??
-		localStorage.getItem('switch_position') ??
-		localStorage.getItem('switch-position');
-
-	if (storedTheme === 'dark' || storedTheme === 'light') {
-		document.documentElement.setAttribute('data-bs-theme', storedTheme);
-	}
-	if (storedPosition !== null) {
-		theme_switch.checked = storedPosition === 'true';
-	} else if (storedTheme) {
-		theme_switch.checked = storedTheme === 'dark';
-	}
-
-	theme_switch.addEventListener('change', () => {
-		const nextTheme = theme_switch.checked ? 'dark' : 'light';
-		document.documentElement.setAttribute('data-bs-theme', nextTheme);
-		localStorage.setItem('theme', nextTheme);
-		localStorage.setItem(
-			'theme_switch_position',
-			theme_switch.checked ? 'true' : 'false'
-		);
-	});
-
-	localStorage.removeItem('switch_position');
-	localStorage.removeItem('switch-position');
-}
-
 // Listen Sample button event
 function listenSampleReq(artist_name) {
 	show_audio_modal_loading(artist_name);
