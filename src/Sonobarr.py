@@ -788,10 +788,10 @@ class DataHandler:
             "auto_start_delay": 60,
             "youtube_api_key": "",
             "similar_artist_batch_size": 10,
-            "superadmin_username": "admin",
-            "superadmin_password": "",
-            "superadmin_display_name": "Super Admin",
-            "superadmin_reset": "false",
+            "sonobarr_superadmin_username": "admin",
+            "sonobarr_superadmin_password": "change-me",
+            "sonobarr_superadmin_display_name": "Super Admin",
+            "sonobarr_superadmin_reset": "false",
         }
 
         self.lidarr_address = self._env("lidarr_address")
@@ -839,10 +839,15 @@ class DataHandler:
         if similar_artist_batch_size:
             self.similar_artist_batch_size = similar_artist_batch_size
 
-        self.superadmin_username = (self.superadmin_username or "").strip() or default_settings["superadmin_username"]
-        self.superadmin_password = (self.superadmin_password or "").strip()
-        self.superadmin_display_name = (self.superadmin_display_name or "").strip() or default_settings["superadmin_display_name"]
-        reset_raw = (self.superadmin_reset or "").strip().lower()
+        superadmin_username = self._env("sonobarr_superadmin_username")
+        superadmin_password = self._env("sonobarr_superadmin_password")
+        superadmin_display_name = self._env("sonobarr_superadmin_display_name")
+        superadmin_reset = self._env("sonobarr_superadmin_reset")
+
+        self.superadmin_username = (superadmin_username or "").strip() or default_settings["sonobarr_superadmin_username"]
+        self.superadmin_password = (superadmin_password or "").strip() or default_settings["sonobarr_superadmin_password"]
+        self.superadmin_display_name = (superadmin_display_name or "").strip() or default_settings["sonobarr_superadmin_display_name"]
+        reset_raw = (superadmin_reset or "").strip().lower()
         self.superadmin_reset_flag = reset_raw in {"1", "true", "yes"}
 
         try:
