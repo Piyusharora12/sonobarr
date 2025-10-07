@@ -363,7 +363,7 @@ class DataHandler:
             api_secret=self.last_fm_api_secret,
         )
 
-        delivered: List[dict] = []
+        # Stream results: emit each artist as soon as it’s ready
         for candidate in batch:
             if session.stop_event.is_set():
                 break
@@ -417,13 +417,12 @@ class DataHandler:
                     "SimilarityScore": clamped_similarity,
                     "Similarity": similarity_label,
                 }
-                delivered.append(artist_payload)
+
+                # Keep server-side state and emit immediately (single-element array)
+                session.recommended_artists.append(artist_payload)
+                socketio.emit("more_artists_loaded", [artist_payload], room=sid)
             except Exception as exc:
                 self.sonobarr_logger.error(f"Error loading artist {related_artist.item.name}: {exc}")
-
-        if delivered:
-            session.recommended_artists.extend(delivered)
-            socketio.emit("more_artists_loaded", delivered, room=sid)
 
         session.similar_artist_batch_pointer += len(batch)
         has_more = session.similar_artist_batch_pointer < len(session.similar_artist_candidates)
