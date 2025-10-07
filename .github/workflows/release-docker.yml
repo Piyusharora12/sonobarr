@@ -28,18 +28,22 @@ jobs:
         run: |
           REPO_LC="${GITHUB_REPOSITORY,,}"
           echo "IMAGE=ghcr.io/${REPO_LC}" >> $GITHUB_ENV
+          # Choose tag from release event or manual input
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "RELEASE_VERSION=${{ github.event.release.tag_name }}" >> $GITHUB_ENV
+          else
+            echo "RELEASE_VERSION=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
+          fi
 
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE }}
-          # Use the release tag for image tags and generate semver variants if possible
           tags: |
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=semver,pattern={{version}},value=${{ env.RELEASE_VERSION }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.RELEASE_VERSION }}
+            type=semver,pattern={{major}},value=${{ env.RELEASE_VERSION }}
           flavor: |
             latest=false
 
@@ -57,7 +61,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Add "latest" tag for releases from main
-        if: github.event.release.prerelease == false && github.event.release.target_commitish == 'main'
+        if: github.event_name == 'release' && github.event.release.prerelease == false && github.event.release.target_commitish == 'main'
         run: echo "EXTRA_TAGS=${{ env.IMAGE }}:latest" >> $GITHUB_ENV
 
       - name: Build and push
@@ -72,4 +76,4 @@ jobs:
             ${{ env.EXTRA_TAGS }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            RELEASE_VERSION=${{ github.event.release.tag_name || github.event.inputs.release_tag }}
+            RELEASE_VERSION=${{ env.RELEASE_VERSION }}
