@@ -19,11 +19,12 @@ The app can:
 
 ## Planned Features  
 
-- Sorting options 
-- More UI settings 
-- AI-powered recommendations using [Deej-A.I.](https://deej-ai.online) or similar
-- Manual artist search  
-- Pre-built Docker image on GitHub Container Registry (GHCR) and/or Docker Hub mirror  
+- [ ] Sorting options 
+- [ ] More UI settings 
+- [ ] AI-powered recommendations using [Deej-A.I.](https://deej-ai.online) or similar
+- [ ] Manual artist search  
+- [x] Pre-built Docker image on GitHub Container Registry (GHCR) ~~and/or Docker Hub mirror~~
+- [x] User management
 - …and more  
 
 ---
@@ -136,6 +137,17 @@ services:
 - **similar_artist_batch_size** – Batch size for similar artists (default: `10`)  
 - **auto_start** – Run automatically at startup (default: `False`)  
 - **auto_start_delay** – Delay in seconds for auto start (default: `60`)  
+
+## Authentication & user management
+
+- Sonobarr now requires a login. A built-in super admin account is created the first time the app starts.
+- Configure the bootstrap admin via environment variables:
+  - `SONOBARR_SUPERADMIN_USERNAME` (default: `admin`)
+  - `SONOBARR_SUPERADMIN_PASSWORD` (if omitted, a secure password is generated and written to the container log on first boot)
+  - `SONOBARR_SUPERADMIN_DISPLAY_NAME` (default: `Super Admin`)
+- Admins can access **Settings** and **User management** from the profile menu (top-right of the app). Non-admins cannot view or change shared API settings.
+- Use the **User management** page to create or delete accounts; Sonobarr ensures at least one admin remains.
+- Every user can update their display name, avatar URL, and password from the **Profile** page.
 
 ---
 

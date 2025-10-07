@@ -38,6 +38,18 @@
 </head>
 
 <body class="bg-body-secondary">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="container mt-3">
+    {% for category, message in messages %}
+    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+      {{ message }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endwith %}
   <!-- Top Bar -->
   <div class="sticky-top">
     <div class="container-fluid bg-dark">
@@ -54,15 +66,38 @@
           <div class="spinner-border spinner-border-sm text-light d-none" id="artists-loading-spinner" role="status">
             <span class="visually-hidden">Loading...</span>
           </div>
+          {% if current_user.is_authenticated and current_user.is_admin %}
           <button class="btn btn-link text-light" id="settings-button" data-bs-toggle="modal"
             data-bs-target="#config-modal">
             <i class="fa fa-gear fa-2x"></i>
           </button>
+          {% endif %}
+          <div class="dropdown">
+            <button class="btn btn-link text-light dropdown-toggle d-flex align-items-center" type="button"
+              data-bs-toggle="dropdown" aria-expanded="false">
+              {% if current_user.is_authenticated and current_user.avatar_url %}
+              <img src="{{ current_user.avatar_url }}" alt="Avatar" class="avatar-thumb me-2">
+              {% else %}
+              <i class="fa fa-user-circle fa-2x me-2"></i>
+              {% endif %}
+              <span class="d-none d-md-inline fw-semibold">{{ current_user.display_name or current_user.username }}</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li class="dropdown-header text-truncate">{{ current_user.display_name or current_user.username }}</li>
+              <li><a class="dropdown-item" href="{{ url_for('profile') }}">Profile</a></li>
+              {% if current_user.is_admin %}
+              <li><a class="dropdown-item" href="{{ url_for('admin_users') }}">User management</a></li>
+              {% endif %}
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="{{ url_for('logout') }}">Sign out</a></li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
+  {% if current_user.is_admin %}
   <!-- Settings Modal -->
   <div class="modal fade" id="config-modal" tabindex="-1" role="dialog" aria-labelledby="settings-modal"
     aria-hidden="true">
@@ -89,7 +124,7 @@
             <label for="root-folder-path">Lidarr Root Folder Path:</label>
             <input type="text" class="form-control" id="root-folder-path" placeholder="Enter Lidarr Root Folder Path">
           </div>
-		  <div class="form-group-modal my-3">
+	  <div class="form-group-modal my-3">
             <label for="youtube-api-key">YouTube API Key:</label>
             <input type="text" class="form-control" id="youtube-api-key" placeholder="Enter YouTUbe API Key">
           </div>
@@ -106,6 +141,7 @@
       </div>
     </div>
   </div>
+  {% endif %}
 
   <!-- SideBar Modal -->
   <div class="offcanvas offcanvas-start" tabindex="-1" id="lidarr-sidebar" aria-labelledby="lidarr-sidebar">

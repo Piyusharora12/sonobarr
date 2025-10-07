@@ -5,3 +5,6 @@ quality_profile_id=1
 lidarr_api_key=
 youtube_api_key=
 similar_artist_batch_size=10
+SONOBARR_SUPERADMIN_USERNAME=admin
+SONOBARR_SUPERADMIN_PASSWORD=change-me
+SONOBARR_SUPERADMIN_DISPLAY_NAME=Super Admin
