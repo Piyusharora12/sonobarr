@@ -663,29 +663,33 @@ socket.on('lastfm_preview', function (preview_info) {
 
 const theme_switch = document.getElementById('theme-switch');
 if (theme_switch) {
-	const saved_theme = localStorage.getItem('theme');
-	const saved_switch_position = localStorage.getItem('switch-position');
+	const storedTheme = localStorage.getItem('theme');
+	const storedPosition =
+		localStorage.getItem('theme_switch_position') ??
+		localStorage.getItem('switch_position') ??
+		localStorage.getItem('switch-position');
 
-	if (saved_switch_position) {
-		theme_switch.checked = saved_switch_position === 'true';
+	if (storedTheme === 'dark' || storedTheme === 'light') {
+		document.documentElement.setAttribute('data-bs-theme', storedTheme);
+	}
+	if (storedPosition !== null) {
+		theme_switch.checked = storedPosition === 'true';
+	} else if (storedTheme) {
+		theme_switch.checked = storedTheme === 'dark';
 	}
 
-	if (saved_theme) {
-		document.documentElement.setAttribute('data-bs-theme', saved_theme);
-	}
-
-	theme_switch.addEventListener('click', () => {
-		if (document.documentElement.getAttribute('data-bs-theme') === 'dark') {
-			document.documentElement.setAttribute('data-bs-theme', 'light');
-		} else {
-			document.documentElement.setAttribute('data-bs-theme', 'dark');
-		}
+	theme_switch.addEventListener('change', () => {
+		const nextTheme = theme_switch.checked ? 'dark' : 'light';
+		document.documentElement.setAttribute('data-bs-theme', nextTheme);
+		localStorage.setItem('theme', nextTheme);
 		localStorage.setItem(
-			'theme',
-			document.documentElement.getAttribute('data-bs-theme')
+			'theme_switch_position',
+			theme_switch.checked ? 'true' : 'false'
 		);
-		localStorage.setItem('switch_position', theme_switch.checked);
 	});
+
+	localStorage.removeItem('switch_position');
+	localStorage.removeItem('switch-position');
 }
 
 // Listen Sample button event
