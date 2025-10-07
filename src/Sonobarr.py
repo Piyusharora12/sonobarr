@@ -789,7 +789,7 @@ class DataHandler:
             "youtube_api_key": "",
             "similar_artist_batch_size": 10,
             "sonobarr_superadmin_username": "admin",
-            "sonobarr_superadmin_password": "change-me",
+            "sonobarr_superadmin_password": "",
             "sonobarr_superadmin_display_name": "Super Admin",
             "sonobarr_superadmin_reset": "false",
         }
