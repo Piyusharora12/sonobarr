@@ -79,6 +79,10 @@ services:
       - quality_profile_id=${quality_profile_id}
       - lidarr_api_key=${lidarr_api_key}
       - youtube_api_key=${youtube_api_key}
+	  - sonobarr_superadmin_username=${sonobarr_superadmin_username}
+      - sonobarr_superadmin_password=${sonobarr_superadmin_password}
+      - sonobarr_superadmin_display_name=${sonobarr_superadmin_display_name}
+      - sonobarr_superadmin_reset=${sonobarr_superadmin_reset}
     networks:
       npm_proxy:
         ipv4_address: 192.168.97.23 # change to an available IP on your proxy network
@@ -107,6 +111,10 @@ services:
       - quality_profile_id=${quality_profile_id}
       - lidarr_api_key=${lidarr_api_key}
       - youtube_api_key=${youtube_api_key}
+	  - sonobarr_superadmin_username=${sonobarr_superadmin_username}
+      - sonobarr_superadmin_password=${sonobarr_superadmin_password}
+      - sonobarr_superadmin_display_name=${sonobarr_superadmin_display_name}
+      - sonobarr_superadmin_reset=${sonobarr_superadmin_reset}
 ```
 
 ### Notes
@@ -137,6 +145,10 @@ services:
 - **similar_artist_batch_size** – Batch size for similar artists (default: `10`)  
 - **auto_start** – Run automatically at startup (default: `False`)  
 - **auto_start_delay** – Delay in seconds for auto start (default: `60`)  
+- **sonobarr_superadmin_username** - The Super Admin's username (first user, has admin rights, default `admin`)
+- **sonobarr_superadmin_password** - The Super Admin's password (default `change-me`)
+- **sonobarr_superadmin_display_name** - The Super Admin's nice name (default `Super Admin`)
+- **sonobarr_superadmin_reset** - Reset the Super Admin log in details (set to `true` once, then to `false` again. Default `false`)
 
 ## Authentication & user management
 
