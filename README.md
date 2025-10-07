@@ -87,4 +87,4 @@ _This setup assumes you already use Docker and have a network (for example, with
 
 This project is licensed under the MIT License.  
 Original work © 2024 TheWicklowWolf.  
-Forked and modified by Dodelidoo Labs, © 2025.  
+Modified by Dodelidoo Labs, © 2025.  

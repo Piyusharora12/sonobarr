@@ -1,0 +1,23 @@
+# Exclude unnecessary files from Docker build context
+.git
+.github
+.gitignore
+.DS_Store
+README.md
+LICENSE
+*.md
+docker-compose.yml
+config
+*.log
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+venv
+env
+.env
+.sample-env
+tests
+tmp
+node_modules
