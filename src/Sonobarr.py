@@ -36,7 +36,7 @@ from flask_socketio import SocketIO, disconnect
 from thefuzz import fuzz
 from unidecode import unidecode
 
-from models import User, db
+from .models import User, db
 
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
