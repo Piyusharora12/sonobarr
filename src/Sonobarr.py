@@ -455,12 +455,13 @@ class DataHandler:
     # Lidarr artist creation ----------------------------------------------
     def add_artists(self, sid: str, raw_artist_name: str) -> None:
         session = self.ensure_session(sid)
+        artist_name = urllib.parse.unquote(raw_artist_name)
+        artist_folder = artist_name.replace("/", " ")
+        status = "Failed to Add"
+
         try:
-            artist_name = urllib.parse.unquote(raw_artist_name)
-            artist_folder = artist_name.replace("/", " ")
             musicbrainzngs.set_useragent(self.app_name, self.app_rev, self.app_url)
             mbid = self.get_mbid_from_musicbrainz(artist_name)
-            status = "Failed to Add"
 
             if mbid:
                 lidarr_url = f"{self.lidarr_address}/api/v1/artist"
@@ -491,7 +492,9 @@ class DataHandler:
                     response_status = response.status_code
 
                 if response_status == 201:
-                    self.sonobarr_logger.info(f"Artist '{artist_name}' added successfully to Lidarr.")
+                    self.sonobarr_logger.info(
+                        "Artist '%s' added successfully to Lidarr.", artist_name
+                    )
                     status = "Added"
                     session.lidarr_items.append({"name": artist_name, "checked": False})
                     session.cleaned_lidarr_items.append(unidecode(artist_name).lower())
@@ -500,30 +503,58 @@ class DataHandler:
                             self.cached_lidarr_names.append(artist_name)
                             self.cached_cleaned_lidarr_names.append(unidecode(artist_name).lower())
                 else:
-                    self.sonobarr_logger.error(f"Failed to add artist '{artist_name}' to Lidarr.")
-                    if response is not None:
+                    if self.dry_run_adding_to_lidarr:
+                        response_body = "Dry-run mode: no request sent."
+                        error_payload = None
+                    elif response is not None:
+                        response_body = response.text.strip()
                         try:
-                            error_data = response.json()
-                        except Exception:
-                            error_data = []
+                            error_payload = response.json()
+                        except ValueError:
+                            error_payload = None
                     else:
-                        error_data = []
-                    error_message = (
-                        error_data[0].get("errorMessage", "No Error Message Returned")
-                        if error_data
-                        else "Error Unknown"
+                        response_body = "No response object returned."
+                        error_payload = None
+
+                    self.sonobarr_logger.error(
+                        "Failed to add artist '%s' to Lidarr (status=%s). Body: %s",
+                        artist_name,
+                        response_status,
+                        response_body,
                     )
-                    self.sonobarr_logger.error(error_message)
+                    if error_payload is not None:
+                        self.sonobarr_logger.error("Lidarr error payload: %s", error_payload)
+
+                    error_message: str
+                    if isinstance(error_payload, list) and error_payload:
+                        error_message = error_payload[0].get(
+                            "errorMessage", "No Error Message Returned"
+                        )
+                    elif isinstance(error_payload, dict):
+                        error_message = (
+                            error_payload.get("errorMessage")
+                            or error_payload.get("message")
+                            or "No Error Message Returned"
+                        )
+                    else:
+                        error_message = response_body or "Error Unknown"
+
+                    self.sonobarr_logger.error("Lidarr error message: %s", error_message)
+
                     if "already been added" in error_message or "configured for an existing artist" in error_message:
                         status = "Already in Lidarr"
                     elif "Invalid Path" in error_message:
                         status = "Invalid Path"
                         self.sonobarr_logger.info(
-                            f"Path: {os.path.join(self.root_folder_path, artist_folder, '')} not valid."
+                            "Path '%s' reported invalid by Lidarr.",
+                            os.path.join(self.root_folder_path, artist_folder, ""),
                         )
                     else:
                         status = "Failed to Add"
             else:
+                self.sonobarr_logger.warning(
+                    "No MusicBrainz match found for '%s'; cannot add to Lidarr.", artist_name
+                )
                 socketio.emit(
                     "new_toast_msg",
                     {
@@ -533,13 +564,24 @@ class DataHandler:
                     room=sid,
                 )
 
+        except Exception as exc:
+            self.sonobarr_logger.exception(
+                "Unexpected error while adding '%s' to Lidarr", artist_name
+            )
+            socketio.emit(
+                "new_toast_msg",
+                {
+                    "title": "Failed to add Artist",
+                    "message": f"Error adding '{artist_name}': {exc}",
+                },
+                room=sid,
+            )
+        finally:
             for item in session.recommended_artists:
                 if item["Name"] == artist_name:
                     item["Status"] = status
                     socketio.emit("refresh_artist", item, room=sid)
                     break
-        except Exception as exc:
-            self.sonobarr_logger.error(f"Adding Artist Error: {exc}")
 
     # Settings -------------------------------------------------------------
     def load_settings(self, sid: str) -> None:
