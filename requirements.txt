@@ -3,6 +3,8 @@ gevent
 gevent-websocket
 flask
 flask_socketio
+flask_login
+flask_sqlalchemy
 requests
 musicbrainzngs
 thefuzz

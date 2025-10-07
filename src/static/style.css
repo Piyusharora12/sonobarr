@@ -3,6 +3,13 @@ body {
     padding: 0;
 }
 
+.avatar-thumb {
+    width: 32px;
+    height: 32px;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
 .logo {
     width: 60px;
     margin-right: 0px;

@@ -19,11 +19,12 @@ The app can:
 
 ## Planned Features  
 
-- Sorting options 
-- More UI settings 
-- AI-powered recommendations using [Deej-A.I.](https://deej-ai.online) or similar
-- Manual artist search  
-- Pre-built Docker image on GitHub Container Registry (GHCR) and/or Docker Hub mirror  
+- [ ] Sorting options 
+- [ ] More UI settings 
+- [ ] AI-powered recommendations using [Deej-A.I.](https://deej-ai.online) or similar
+- [ ] Manual artist search  
+- [x] Pre-built Docker image on GitHub Container Registry (GHCR) ~~and/or Docker Hub mirror~~
+- [x] User management
 - …and more  
 
 ---
@@ -78,6 +79,10 @@ services:
       - quality_profile_id=${quality_profile_id}
       - lidarr_api_key=${lidarr_api_key}
       - youtube_api_key=${youtube_api_key}
+	  - sonobarr_superadmin_username=${sonobarr_superadmin_username}
+      - sonobarr_superadmin_password=${sonobarr_superadmin_password}
+      - sonobarr_superadmin_display_name=${sonobarr_superadmin_display_name}
+      - sonobarr_superadmin_reset=${sonobarr_superadmin_reset}
     networks:
       npm_proxy:
         ipv4_address: 192.168.97.23 # change to an available IP on your proxy network
@@ -106,6 +111,10 @@ services:
       - quality_profile_id=${quality_profile_id}
       - lidarr_api_key=${lidarr_api_key}
       - youtube_api_key=${youtube_api_key}
+	  - sonobarr_superadmin_username=${sonobarr_superadmin_username}
+      - sonobarr_superadmin_password=${sonobarr_superadmin_password}
+      - sonobarr_superadmin_display_name=${sonobarr_superadmin_display_name}
+      - sonobarr_superadmin_reset=${sonobarr_superadmin_reset}
 ```
 
 ### Notes
@@ -136,6 +145,21 @@ services:
 - **similar_artist_batch_size** – Batch size for similar artists (default: `10`)  
 - **auto_start** – Run automatically at startup (default: `False`)  
 - **auto_start_delay** – Delay in seconds for auto start (default: `60`)  
+- **sonobarr_superadmin_username** - The Super Admin's username (first user, has admin rights, default `admin`)
+- **sonobarr_superadmin_password** - The Super Admin's password (default `change-me`)
+- **sonobarr_superadmin_display_name** - The Super Admin's nice name (default `Super Admin`)
+- **sonobarr_superadmin_reset** - Reset the Super Admin log in details (set to `true` once, then to `false` again. Default `false`)
+
+## Authentication & user management
+
+- Sonobarr now requires a login. A built-in super admin account is created the first time the app starts.
+- Configure the bootstrap admin via environment variables:
+  - `SONOBARR_SUPERADMIN_USERNAME` (default: `admin`)
+  - `SONOBARR_SUPERADMIN_PASSWORD` (if omitted, a secure password is generated and written to the container log on first boot)
+  - `SONOBARR_SUPERADMIN_DISPLAY_NAME` (default: `Super Admin`)
+- Admins can access **Settings** and **User management** from the profile menu (top-right of the app). Non-admins cannot view or change shared API settings.
+- Use the **User management** page to create or delete accounts; Sonobarr ensures at least one admin remains.
+- Every user can update their display name, avatar URL, and password from the **Profile** page.
 
 ---
 
