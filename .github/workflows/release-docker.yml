@@ -43,7 +43,6 @@ jobs:
             type=raw,value=${{ env.RELEASE_VERSION }}
 
       - name: Add "latest" tag for any non-prerelease release
-        if: github.event_name == 'release' && github.event.release.prerelease == false
         run: echo "EXTRA_TAGS=${{ env.IMAGE }}:latest" >> $GITHUB_ENV
 
       - name: Set up QEMU
