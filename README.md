@@ -41,20 +41,76 @@ The app can:
 
 ---
 
-## Run using Docker Compose  
+## Running Sonobarr with Docker Compose
 
-_This setup assumes you already use Docker and have a network (for example, with NGINX Proxy Manager). Check the comments in the `docker-compose.yml` file if you prefer a simpler setup with exposed ports._  
+You can run Sonobarr using Docker Compose. There are two main setups:
+- With a proxy (recommended) - if you already use something like NGINX Proxy Manager or Traefik (and ideally, a DNS tool like Technitium)
+- With exposed ports (simpler, no proxy) - directly exposing Sonobarr's port on your host. 
 
-1. Clone this repository  
-2. Set the ownership of the cloned repo:  
-   `sudo chown -R 1000:1000 sonobarr`  
-3. Move into the cloned repo:  
-   `cd sonobarr`  
-4. Edit the `docker-compose.yml` file to match your environment  
-5. Rename `.sample-env` to `.env` and adjust the values as needed  
-6. Start the container:  
-   `sudo docker compose up -d`  
-   - This will **build the image locally** on the first run, and then reuse the local image afterwards  
+### Preparation
+1. Create a working directory on your host, e.g.: `mkdir sonobarr`
+2. Set ownership (to ensure mounted volumes are writable): `sudo chown -R 1000:1000 sonobarr`
+3. Move into the directory: `cd sonobarr`
+4. Download the example Compose file and environment file:
+```
+wget https://raw.githubusercontent.com/Dodelidoo-Labs/sonobarr/main/docker-compose.yml -O docker-compose.yml
+wget https://raw.githubusercontent.com/Dodelidoo-Labs/sonobarr/main/.sample-env -O .env
+```
+5. Edit the `.env` file with your Last.fm, Lidarr, and YouTube API keys (optional, but without it "prehear" feature wont' work)
+6. Adjust `docker-compose.yml` as needed (see setup options below).
+7. Run with `sudo docker compose up -d`
+
+### Run with a proxy (recommended)
+If you already use a reverse proxy like NGINX Proxy Manager or Traefik, you can keep the container internal and let the proxy handle external access.
+```
+services:
+  sonobarr:
+    image: ghcr.io/dodelidoo-labs/sonobarr:latest # or ghcr.io/dodelidoo-labs/sonobarr:0.1.0 for a specific version
+    container_name: sonobarr
+    volumes:
+      - ./config:/sonobarr/config
+      - /etc/localtime:/etc/localtime:ro
+    restart: unless-stopped
+    environment:
+      - last_fm_api_key=${last_fm_api_key}
+      - last_fm_api_secret=${last_fm_api_secret}
+      - lidarr_address=${lidarr_address}
+      - quality_profile_id=${quality_profile_id}
+      - lidarr_api_key=${lidarr_api_key}
+      - youtube_api_key=${youtube_api_key}
+    networks:
+      npm_proxy:
+        ipv4_address: 192.168.97.23 # change to an available IP on your proxy network
+
+networks:
+  npm_proxy:
+    external: true
+```
+
+### Run with exposed ports (no proxy)
+```
+services:
+  sonobarr:
+    image: ghcr.io/dodelidoo-labs/sonobarr:latest # or ghcr.io/dodelidoo-labs/sonobarr:0.1.0 for a specific version
+    container_name: sonobarr
+    volumes:
+      - ./config:/sonobarr/config
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    environment:
+      - last_fm_api_key=${last_fm_api_key}
+      - last_fm_api_secret=${last_fm_api_secret}
+      - lidarr_address=${lidarr_address}
+      - quality_profile_id=${quality_profile_id}
+      - lidarr_api_key=${lidarr_api_key}
+      - youtube_api_key=${youtube_api_key}
+```
+
+### Notes
+- Use `:latest` to always get the newest release, or pin to a specific version (e.g. `:0.1.0`) for stability.
+- The `.env` file holds your secrets and config values — don't leak it!
 
 ---
 

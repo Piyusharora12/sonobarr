@@ -1,16 +1,10 @@
 services:
   sonobarr:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: sonobarr-local
+    image: ghcr.io/dodelidoo-labs/sonobarr:latest # or ghcr.io/dodelidoo-labs/sonobarr:0.1.0 for a specific version
     container_name: sonobarr
     volumes:
       - ./config:/sonobarr/config
       - /etc/localtime:/etc/localtime:ro
-      #- ./src:/sonobarr/src # only needed if you want to modify the source code
-    #ports: # uncomment if you want to expose the app directly
-      #- 5000:5000 # uncomment if you want to expose the app directly
     restart: unless-stopped
     environment:
       - last_fm_api_key=${last_fm_api_key}
@@ -19,10 +13,10 @@ services:
       - quality_profile_id=${quality_profile_id}
       - lidarr_api_key=${lidarr_api_key}
       - youtube_api_key=${youtube_api_key}
-    networks: # comment if you want to expose the app directly, in which case you will open ports
-      npm_proxy: # comment if you want to expose the app directly, in which case you will open ports
-        ipv4_address: 192.168.97.23 # Change to your desired and free IP. Comment if you want to expose the app directly, in which case you will open ports
+    networks:
+      npm_proxy:
+        ipv4_address: 192.168.97.23 # change to an available IP on your proxy network
 
 networks:
-    npm_proxy:
-      external: true
+  npm_proxy:
+    external: true
