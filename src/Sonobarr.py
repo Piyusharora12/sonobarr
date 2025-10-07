@@ -139,6 +139,14 @@ class DataHandler:
 
         self.load_environ_or_config_settings()
 
+    def _env(self, key: str) -> str:
+        # Prefer existing lowercase usage, but accept UPPERCASE too
+        for candidate in (key, key.upper()):
+            val = os.environ.get(candidate)
+            if val not in (None, ""):
+                return val
+        return ""
+
     # Session helpers -----------------------------------------------------
     def ensure_session(self, sid: str, user_id: Optional[int] = None) -> SessionState:
         with self.sessions_lock:
@@ -782,46 +790,50 @@ class DataHandler:
             "similar_artist_batch_size": 10,
         }
 
-        self.lidarr_address = os.environ.get("lidarr_address", "")
-        self.lidarr_api_key = os.environ.get("lidarr_api_key", "")
-        self.youtube_api_key = os.environ.get("youtube_api_key", "")
-        self.root_folder_path = os.environ.get("root_folder_path", "")
+        self.lidarr_address = self._env("lidarr_address")
+        self.lidarr_api_key = self._env("lidarr_api_key")
+        self.youtube_api_key = self._env("youtube_api_key")
+        self.root_folder_path = self._env("root_folder_path")
 
-        fallback_to_top_result = os.environ.get("fallback_to_top_result", "")
+        fallback_to_top_result = self._env("fallback_to_top_result")
         self.fallback_to_top_result = (
             fallback_to_top_result.lower() == "true" if fallback_to_top_result != "" else ""
         )
 
-        lidarr_api_timeout = os.environ.get("lidarr_api_timeout", "")
+        lidarr_api_timeout = self._env("lidarr_api_timeout")
         self.lidarr_api_timeout = float(lidarr_api_timeout) if lidarr_api_timeout else ""
 
-        quality_profile_id = os.environ.get("quality_profile_id", "")
+        quality_profile_id = self._env("quality_profile_id")
         self.quality_profile_id = int(quality_profile_id) if quality_profile_id else ""
 
-        metadata_profile_id = os.environ.get("metadata_profile_id", "")
+        metadata_profile_id = self._env("metadata_profile_id")
         self.metadata_profile_id = int(metadata_profile_id) if metadata_profile_id else ""
 
-        search_for_missing_albums = os.environ.get("search_for_missing_albums", "")
+        search_for_missing_albums = self._env("search_for_missing_albums")
         self.search_for_missing_albums = (
             search_for_missing_albums.lower() == "true" if search_for_missing_albums != "" else ""
         )
 
-        dry_run_adding_to_lidarr = os.environ.get("dry_run_adding_to_lidarr", "")
+        dry_run_adding_to_lidarr = self._env("dry_run_adding_to_lidarr")
         self.dry_run_adding_to_lidarr = (
             dry_run_adding_to_lidarr.lower() == "true" if dry_run_adding_to_lidarr != "" else ""
         )
 
-        self.app_name = os.environ.get("app_name", "")
-        self.app_rev = os.environ.get("app_rev", "")
-        self.app_url = os.environ.get("app_url", "")
-        self.last_fm_api_key = os.environ.get("last_fm_api_key", "")
-        self.last_fm_api_secret = os.environ.get("last_fm_api_secret", "")
+        self.app_name = self._env("app_name")
+        self.app_rev = self._env("app_rev")
+        self.app_url = self._env("app_url")
+        self.last_fm_api_key = self._env("last_fm_api_key")
+        self.last_fm_api_secret = self._env("last_fm_api_secret")
 
-        auto_start = os.environ.get("auto_start", "")
+        auto_start = self._env("auto_start")
         self.auto_start = auto_start.lower() == "true" if auto_start != "" else ""
 
-        auto_start_delay = os.environ.get("auto_start_delay", "")
+        auto_start_delay = self._env("auto_start_delay")
         self.auto_start_delay = float(auto_start_delay) if auto_start_delay else ""
+
+        similar_artist_batch_size = self._env("similar_artist_batch_size")
+        if similar_artist_batch_size:
+            self.similar_artist_batch_size = similar_artist_batch_size
 
         try:
             if os.path.exists(self.settings_config_file):
