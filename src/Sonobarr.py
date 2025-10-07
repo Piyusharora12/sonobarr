@@ -788,6 +788,10 @@ class DataHandler:
             "auto_start_delay": 60,
             "youtube_api_key": "",
             "similar_artist_batch_size": 10,
+            "superadmin_username": "admin",
+            "superadmin_password": "",
+            "superadmin_display_name": "Super Admin",
+            "superadmin_reset": "false",
         }
 
         self.lidarr_address = self._env("lidarr_address")
@@ -835,6 +839,12 @@ class DataHandler:
         if similar_artist_batch_size:
             self.similar_artist_batch_size = similar_artist_batch_size
 
+        self.superadmin_username = (self.superadmin_username or "").strip() or default_settings["superadmin_username"]
+        self.superadmin_password = (self.superadmin_password or "").strip()
+        self.superadmin_display_name = (self.superadmin_display_name or "").strip() or default_settings["superadmin_display_name"]
+        reset_raw = (self.superadmin_reset or "").strip().lower()
+        self.superadmin_reset_flag = reset_raw in {"1", "true", "yes"}
+
         try:
             if os.path.exists(self.settings_config_file):
                 self.sonobarr_logger.info("Loading Config via file")
@@ -847,7 +857,7 @@ class DataHandler:
             self.sonobarr_logger.error(f"Error Loading Config: {exc}")
 
         for key, value in default_settings.items():
-            if getattr(self, key) == "":
+            if getattr(self, key, "") == "":
                 setattr(self, key, value)
 
         try:
@@ -870,14 +880,13 @@ data_handler = DataHandler()
 
 def bootstrap_super_admin() -> None:
     admin_count = User.query.filter_by(is_admin=True).count()
-    reset_flag = (os.environ.get("SONOBARR_SUPERADMIN_RESET", "").strip().lower() in {"1", "true", "yes"})
+    reset_flag = data_handler.superadmin_reset_flag
     if admin_count > 0 and not reset_flag:
         return
 
-    username = os.environ.get("SONOBARR_SUPERADMIN_USERNAME", "admin")
-    password = os.environ.get("SONOBARR_SUPERADMIN_PASSWORD")
-    display_name = os.environ.get("SONOBARR_SUPERADMIN_DISPLAY_NAME", "Super Admin")
-
+    username = data_handler.superadmin_username
+    password = data_handler.superadmin_password
+    display_name = data_handler.superadmin_display_name
     generated_password = False
     if not password:
         password = secrets.token_urlsafe(16)
