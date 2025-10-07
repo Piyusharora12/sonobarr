@@ -3,6 +3,11 @@ name: Release Docker Image
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to build"
+        required: true
 
 permissions:
   contents: read
@@ -67,4 +72,4 @@ jobs:
             ${{ env.EXTRA_TAGS }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            RELEASE_VERSION=${{ github.ref_name }}
+            RELEASE_VERSION=${{ github.event.release.tag_name || github.event.inputs.release_tag }}
