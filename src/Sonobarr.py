@@ -817,7 +817,8 @@ data_handler = DataHandler()
 
 def bootstrap_super_admin() -> None:
     admin_count = User.query.filter_by(is_admin=True).count()
-    if admin_count > 0:
+    reset_flag = (os.environ.get("SONOBARR_SUPERADMIN_RESET", "").strip().lower() in {"1", "true", "yes"})
+    if admin_count > 0 and not reset_flag:
         return
 
     username = os.environ.get("SONOBARR_SUPERADMIN_USERNAME", "admin")
@@ -836,6 +837,7 @@ def bootstrap_super_admin() -> None:
             existing.set_password(password)
         if display_name:
             existing.display_name = display_name
+        action = "updated"
     else:
         admin = User(
             username=username,
@@ -844,6 +846,7 @@ def bootstrap_super_admin() -> None:
         )
         admin.set_password(password)
         db.session.add(admin)
+        action = "created"
 
     db.session.commit()
 
@@ -853,6 +856,8 @@ def bootstrap_super_admin() -> None:
             username,
             password,
         )
+    else:
+        logger.info("Super-admin %s %s.", username, action)
 
 
 with app.app_context():
