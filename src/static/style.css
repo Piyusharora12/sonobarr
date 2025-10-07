@@ -113,6 +113,14 @@ body {
     border-color: var(--bs-primary); 
 }
 
+.btn-link .fa {
+    text-decoration: none !important;
+}
+
+.btn-link .fa::before {
+    text-decoration: none !important;
+}
+
 @media screen and (max-width: 600px) {
     h1{
         margin-bottom: 0rem!important;
