@@ -13,6 +13,10 @@ services:
       - quality_profile_id=${quality_profile_id}
       - lidarr_api_key=${lidarr_api_key}
       - youtube_api_key=${youtube_api_key}
+      - sonobarr_superadmin_username=${sonobarr_superadmin_username}
+      - sonobarr_superadmin_password=${sonobarr_superadmin_password}
+      - sonobarr_superadmin_display_name=${sonobarr_superadmin_display_name}
+      - sonobarr_superadmin_reset=${sonobarr_superadmin_reset}
     networks:
       npm_proxy:
         ipv4_address: 192.168.97.23 # change to an available IP on your proxy network
