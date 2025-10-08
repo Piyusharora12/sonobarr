@@ -4,7 +4,7 @@
 {% block body_classes %}bg-body-secondary{% endblock %}
 {% block topbar_title %}User management{% endblock %}
 {% block topbar_actions %}
-<a class="btn btn-outline-light btn-sm" href="{{ url_for('home') }}">Back to app</a>
+<a class="btn btn-outline-light btn-sm" href="{{ url_for('main.home') }}">Back to app</a>
 {% endblock %}
 
 {% block main %}
@@ -15,6 +15,7 @@
         <div class="card-body">
           <h2 class="h5 mb-3">Create user</h2>
           <form method="post" novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="create">
             <div class="mb-3">
               <label for="username" class="form-label">Username</label>
@@ -79,6 +80,7 @@
                   <td class="text-end">
                     {% if user.id != current_user.id %}
                     <form method="post" class="d-inline" onsubmit="return confirm('Delete {{ user.username }}?');">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       <input type="hidden" name="action" value="delete">
                       <input type="hidden" name="user_id" value="{{ user.id }}">
                       <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>

@@ -2,7 +2,7 @@
 
 > Music discovery for Lidarr power users, backed by Last.fm intelligence and a modern web UI.
 
-[![Release](https://img.shields.io/github/v/release/Dodelidoo-Labs/sonobarr?label=Latest%20release)](https://github.com/Dodelidoo-Labs/sonobarr/releases)
+[![Release](https://img.shields.io/github/v/release/Dodelidoo-Labs/sonobarr?label=Latest%20release&cacheSeconds=60)](https://github.com/Dodelidoo-Labs/sonobarr/releases)
 [![Container](https://img.shields.io/badge/GHCR-sonobarr-blue?logo=github)](https://github.com/Dodelidoo-Labs/sonobarr/pkgs/container/sonobarr)
 [![License](https://img.shields.io/github/license/Dodelidoo-Labs/sonobarr)](./LICENSE)
 
