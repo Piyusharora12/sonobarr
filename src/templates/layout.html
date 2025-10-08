@@ -70,16 +70,16 @@
               </button>
               <ul class="dropdown-menu dropdown-menu-end">
                 <li class="dropdown-header text-truncate">{{ current_user.display_name or current_user.username }}</li>
-                <li><a class="dropdown-item" href="{{ url_for('profile') }}">Profile</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('main.profile') }}">Profile</a></li>
                 {% if current_user.is_admin %}
-                <li><a class="dropdown-item" href="{{ url_for('admin_users') }}">User management</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('admin.users') }}">User management</a></li>
                 {% endif %}
                 <li><hr class="dropdown-divider"></li>
-                <li><a class="dropdown-item" href="{{ url_for('logout') }}">Sign out</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">Sign out</a></li>
               </ul>
             </div>
             {% else %}
-            <a class="btn btn-outline-light btn-sm" href="{{ url_for('login') }}">Sign in</a>
+            <a class="btn btn-outline-light btn-sm" href="{{ url_for('auth.login') }}">Sign in</a>
             {% endif %}
           </div>
         </div>

@@ -4,7 +4,7 @@
 {% block body_classes %}bg-body-secondary{% endblock %}
 {% block topbar_title %}Profile{% endblock %}
 {% block topbar_actions %}
-<a class="btn btn-outline-light btn-sm" href="{{ url_for('home') }}">Back to app</a>
+<a class="btn btn-outline-light btn-sm" href="{{ url_for('main.home') }}">Back to app</a>
 {% endblock %}
 
 {% block main %}
@@ -15,6 +15,7 @@
         <div class="card-body">
           <h1 class="h4 mb-3">Profile</h1>
           <form method="post" novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="mb-3">
               <label for="display_name" class="form-label">Display name</label>
               <input type="text" class="form-control" id="display_name" name="display_name"
@@ -45,7 +46,7 @@
                      autocomplete="new-password">
             </div>
             <div class="d-flex justify-content-end gap-2">
-              <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">Cancel</a>
+              <a href="{{ url_for('main.home') }}" class="btn btn-outline-secondary">Cancel</a>
               <button type="submit" class="btn btn-primary">Save changes</button>
             </div>
           </form>

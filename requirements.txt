@@ -5,6 +5,8 @@ flask
 flask_socketio
 flask_login
 flask_sqlalchemy
+Flask-Migrate
+Flask-WTF
 requests
 musicbrainzngs
 thefuzz

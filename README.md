@@ -2,7 +2,7 @@
 
 > Music discovery for Lidarr power users, backed by Last.fm intelligence and a modern web UI.
 
-[![Release](https://img.shields.io/github/v/release/Dodelidoo-Labs/sonobarr?label=Latest%20release)](https://github.com/Dodelidoo-Labs/sonobarr/releases)
+[![Release](https://img.shields.io/github/v/release/Dodelidoo-Labs/sonobarr?label=Latest%20release&cacheSeconds=60)](https://github.com/Dodelidoo-Labs/sonobarr/releases)
 [![Container](https://img.shields.io/badge/GHCR-sonobarr-blue?logo=github)](https://github.com/Dodelidoo-Labs/sonobarr/pkgs/container/sonobarr)
 [![License](https://img.shields.io/github/license/Dodelidoo-Labs/sonobarr)](./LICENSE)
 
@@ -36,7 +36,9 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
 - 🎧 **Preview & bio panels** – jump straight into YouTube or iTunes previews and read artist bios.
 - ⚡️ **Real-time UX** – Socket.IO pushes new cards, status updates, and toast notifications instantly.
 - 👥 **Role-based access** – built-in authentication plus an admin-only settings & user management area.
-- 🔄 **Update awareness** – footer badge compares your container version with the latest GitHub release.
+- 🔒 **Secure forms** – CSRF protection and stricter cookie settings keep sessions and admin actions safe.
+- 🔔 **Update awareness** – footer badge compares your container version with the latest GitHub release.
+-- 🧱 **Zero touch migrations** – database schema managed byFlask-Migrate and applied automatically on boot.
 - 🐳 **Docker-first deployment** – official image on GHCR, mountable config volume, healthy defaults.
 
 ---
@@ -92,7 +94,8 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
    ```bash
    mkdir -p config
    sudo chown -R 1000:1000 config
-   ```
+   ````
+   > On first boot the container creates `/sonobarr/config/migrations`, seeds the database, and runs all migrations automatically.
 5. Start Sonobarr:
    ```bash
    docker compose up -d
@@ -143,6 +146,7 @@ All variables can be supplied in lowercase (preferred for `.env`) or uppercase (
 | `sonobarr_superadmin_display_name` | `Super Admin` | Friendly display name shown in the UI. |
 | `sonobarr_superadmin_reset` | `false` | Set to `true` **once** to reapply the bootstrap credentials on next start. |
 | `release_version` | `unknown` | Populated automatically inside the Docker image; shown in the footer. No need to set manually. |
+| `sonobarr_config_dir` | `/sonobarr/config` | Override where Sonobarr writes `app.db`, `settings_config.json`, and migrations. |
 
 > ℹ️ `secret_key` is mandatory. If missing, the app refuses to boot to prevent insecure session cookies. With Docker Compose, make sure the key exists in `.env` and that `.env` is declared via `env_file:` as shown above.
 

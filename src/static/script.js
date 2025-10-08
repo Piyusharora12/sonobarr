@@ -26,7 +26,9 @@ const root_folder_path = document.getElementById('root-folder-path');
 const youtube_api_key = document.getElementById('youtube-api-key');
 
 var lidarr_items = [];
-var socket = io();
+var socket = io({
+	withCredentials: true,
+});
 
 // Initial load flow control
 let initialLoadComplete = false;
