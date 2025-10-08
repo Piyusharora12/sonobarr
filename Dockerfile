@@ -2,6 +2,7 @@ FROM python:3.12-alpine
 
 ARG RELEASE_VERSION
 ENV RELEASE_VERSION=${RELEASE_VERSION}
+ENV PYTHONPATH="/sonobarr/src"
 
 RUN apk update && apk add --no-cache su-exec
 
