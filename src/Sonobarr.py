@@ -667,39 +667,92 @@ class DataHandler:
             api_key=self.last_fm_api_key,
             api_secret=self.last_fm_api_secret,
         )
-        yt_key = self.youtube_api_key
-        if not yt_key:
-            socketio.emit("prehear_result", {"error": "YouTube API key missing"}, room=sid)
-            return
-        result: dict = {"error": "No sample found"}
+        yt_key = (self.youtube_api_key or "").strip()
+        result: dict[str, str] = {"error": "No sample found"}
+        top_tracks = []
         try:
-            top_tracks = []
-            try:
-                artist = lfm.get_artist(artist_name)
-                top_tracks = artist.get_top_tracks(limit=10)
-            except Exception as exc:
-                self.sonobarr_logger.error(f"LastFM error: {exc}")
-            for track in top_tracks:
-                track_name = track.item.title
-                query = f"{artist_name} {track_name}"
-                yt_url = (
-                    "https://www.googleapis.com/youtube/v3/search?part=snippet"
-                    f"&q={requests.utils.quote(query)}&key={yt_key}&type=video&maxResults=1"
-                )
-                yt_resp = requests.get(yt_url, timeout=10)
-                yt_items = yt_resp.json().get("items", [])
-                if yt_items:
-                    video_id = yt_items[0]["id"]["videoId"]
-                    result = {
-                        "videoId": video_id,
-                        "track": track_name,
-                        "artist": artist_name,
-                    }
-                    break
-                time.sleep(0.2)
+            artist = lfm.get_artist(artist_name)
+            top_tracks = artist.get_top_tracks(limit=10)
         except Exception as exc:
-            result = {"error": str(exc)}
+            self.sonobarr_logger.error(f"LastFM error: {exc}")
+
+        def attempt_youtube(track_name: str) -> Optional[dict[str, str]]:
+            if not yt_key:
+                return None
+            query = f"{artist_name} {track_name}"
+            yt_url = (
+                "https://www.googleapis.com/youtube/v3/search?part=snippet"
+                f"&q={requests.utils.quote(query)}&key={yt_key}&type=video&maxResults=1"
+            )
+            try:
+                yt_resp = requests.get(yt_url, timeout=10)
+                yt_resp.raise_for_status()
+            except Exception as exc:
+                self.sonobarr_logger.error(f"YouTube search failed: {exc}")
+                return None
+            yt_items = yt_resp.json().get("items", [])
+            if not yt_items:
+                return None
+            video_id = yt_items[0]["id"]["videoId"]
+            return {
+                "videoId": video_id,
+                "track": track_name,
+                "artist": artist_name,
+                "source": "youtube",
+            }
+
+        def attempt_itunes(track_name: Optional[str]) -> Optional[dict[str, str]]:
+            search_term = f"{artist_name} {track_name}" if track_name else artist_name
+            params = {
+                "term": search_term,
+                "entity": "musicTrack",
+                "limit": 5,
+                "media": "music",
+            }
+            try:
+                resp = requests.get("https://itunes.apple.com/search", params=params, timeout=10)
+                resp.raise_for_status()
+            except Exception as exc:
+                self.sonobarr_logger.error(f"iTunes lookup failed: {exc}")
+                return None
+            for entry in resp.json().get("results", []):
+                preview_url = entry.get("previewUrl")
+                if not preview_url:
+                    continue
+                return {
+                    "previewUrl": preview_url,
+                    "track": entry.get("trackName") or (track_name or artist_name),
+                    "artist": entry.get("artistName") or artist_name,
+                    "source": "itunes",
+                }
+            return None
+
+        try:
+            if yt_key:
+                for track in top_tracks:
+                    track_name = track.item.title
+                    candidate = attempt_youtube(track_name)
+                    if candidate:
+                        result = candidate
+                        break
+                    time.sleep(0.2)
+
+            if isinstance(result, dict) and not result.get("previewUrl") and not result.get("videoId"):
+                for track in top_tracks:
+                    track_name = track.item.title
+                    candidate = attempt_itunes(track_name)
+                    if candidate:
+                        result = candidate
+                        break
+
+            if isinstance(result, dict) and not result.get("previewUrl") and not result.get("videoId"):
+                fallback_candidate = attempt_itunes(None)
+                if fallback_candidate:
+                    result = fallback_candidate
+        except Exception as exc:
             self.sonobarr_logger.error(f"Prehear error: {exc}")
+            result = {"error": str(exc)}
+
         socketio.emit("prehear_result", result, room=sid)
 
     # Utilities ------------------------------------------------------------
