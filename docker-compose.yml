@@ -2,21 +2,12 @@ services:
   sonobarr:
     image: ghcr.io/dodelidoo-labs/sonobarr:latest # or ghcr.io/dodelidoo-labs/sonobarr:0.1.0 for a specific version
     container_name: sonobarr
+    env_file:
+      - .env
     volumes:
       - ./config:/sonobarr/config
       - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped
-    environment:
-      - last_fm_api_key=${last_fm_api_key}
-      - last_fm_api_secret=${last_fm_api_secret}
-      - lidarr_address=${lidarr_address}
-      - quality_profile_id=${quality_profile_id}
-      - lidarr_api_key=${lidarr_api_key}
-      - youtube_api_key=${youtube_api_key}
-      - sonobarr_superadmin_username=${sonobarr_superadmin_username}
-      - sonobarr_superadmin_password=${sonobarr_superadmin_password}
-      - sonobarr_superadmin_display_name=${sonobarr_superadmin_display_name}
-      - sonobarr_superadmin_reset=${sonobarr_superadmin_reset}
     networks:
       npm_proxy:
         ipv4_address: 192.168.97.23 # change to an available IP on your proxy network
