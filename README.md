@@ -9,7 +9,7 @@
 Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph to surface artists you'll actually like. It runs as a Flask + Socket.IO application, ships with a polished Bootstrap UI, and includes admin tooling so folks can share a single instance safely.
 
 <p align="center">
-  <img src="/src/static/sonobarr.png" alt="Sonobarr logo" width="220">
+  <img src="/src/static/sonobarr.png" alt="Sonobarr logo">
 </p>
 
 ---
