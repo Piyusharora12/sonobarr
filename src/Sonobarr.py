@@ -11,7 +11,7 @@ import time
 import urllib.parse
 from dataclasses import dataclass, field
 from functools import wraps
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import musicbrainzngs
 import pylast
@@ -42,17 +42,128 @@ from .models import User, db
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("sonobarr")
 
+GITHUB_REPO = "Dodelidoo-Labs/sonobarr"
+GITHUB_REPO_URL = f"https://github.com/{GITHUB_REPO}"
+GITHUB_RELEASES_LATEST_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+RELEASE_CACHE_TTL_SECONDS = 60 * 60  # 1 hour
+_release_cache: Dict[str, Any] = {
+    "fetched_at": 0.0,
+    "tag_name": None,
+    "html_url": None,
+    "error": None,
+}
+_release_cache_lock = threading.Lock()
+
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, os.pardir))
 CONFIG_DIR = os.path.join(ROOT_DIR, "config")
 os.makedirs(CONFIG_DIR, exist_ok=True)
 DB_PATH = os.path.join(CONFIG_DIR, "app.db")
 
+def get_env_value(key: str, default: Optional[str] = None) -> Optional[str]:
+    """Retrieve an environment variable preferring lowercase naming."""
+    candidates: List[str] = []
+    for candidate in (key, key.lower(), key.upper()):
+        if candidate not in candidates:
+            candidates.append(candidate)
+    for candidate in candidates:
+        value = os.environ.get(candidate)
+        if value not in (None, ""):
+            return value
+    return default
+
+
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-me")
+secret_key = get_env_value("secret_key")
+if not secret_key:
+    raise RuntimeError(
+        "SECRET_KEY environment variable is required. Set 'secret_key' (preferred) or 'SECRET_KEY'."
+    )
+app.config["SECRET_KEY"] = secret_key
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
+app.config["APP_VERSION"] = get_env_value("release_version", "unknown") or "unknown"
+app.config["REPO_URL"] = GITHUB_REPO_URL
+
+
+def get_latest_release_info(force: bool = False) -> Dict[str, Any]:
+    now = time.time()
+    with _release_cache_lock:
+        age = now - _release_cache["fetched_at"]
+        if not force and age < RELEASE_CACHE_TTL_SECONDS and (
+            _release_cache["tag_name"] or _release_cache["error"]
+        ):
+            return dict(_release_cache)
+
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "sonobarr-app",
+    }
+
+    info: Dict[str, Any] = {
+        "tag_name": None,
+        "html_url": None,
+        "error": None,
+        "fetched_at": now,
+    }
+
+    try:
+        response = requests.get(GITHUB_RELEASES_LATEST_URL, headers=headers, timeout=5)
+        if response.status_code == 200:
+            payload = response.json()
+            info["tag_name"] = (payload.get("tag_name") or payload.get("name") or "").strip() or None
+            info["html_url"] = payload.get("html_url") or f"{GITHUB_REPO_URL}/releases"
+        else:
+            info["error"] = f"GitHub API returned status {response.status_code}"
+    except Exception as exc:  # pragma: no cover - network errors
+        info["error"] = str(exc)
+
+    if not info.get("html_url"):
+        info["html_url"] = f"{GITHUB_REPO_URL}/releases"
+
+    with _release_cache_lock:
+        _release_cache.update(info)
+
+    return dict(info)
+
+
+@app.context_processor
+def inject_footer_metadata() -> Dict[str, Any]:
+    current_version = (app.config.get("APP_VERSION") or "unknown").strip() or "unknown"
+    release_info = get_latest_release_info()
+    latest_version = release_info.get("tag_name")
+    update_available: Optional[bool]
+    status_color = "muted"
+
+    if latest_version and current_version.lower() not in {"", "unknown", "dev", "development"}:
+        update_available = latest_version != current_version
+        status_color = "danger" if update_available else "success"
+    elif latest_version:
+        update_available = None
+    else:
+        update_available = None
+
+    if release_info.get("error") and not latest_version:
+        status_color = "muted"
+
+    status_label = "Update status unavailable"
+    if update_available is True and latest_version:
+        status_label = f"Update available · {latest_version}"
+    elif update_available is False:
+        status_label = "Up to date"
+    elif update_available is None and latest_version:
+        status_label = f"Latest release: {latest_version}"
+
+    return {
+        "repo_url": app.config.get("REPO_URL", GITHUB_REPO_URL),
+        "app_version": current_version,
+        "latest_release_version": latest_version,
+        "latest_release_url": release_info.get("html_url") or f"{GITHUB_REPO_URL}/releases",
+        "update_available": update_available,
+        "update_status_color": status_color,
+        "update_status_label": status_label,
+    }
 
 db.init_app(app)
 socketio = SocketIO(app)
@@ -122,7 +233,7 @@ class DataHandler:
         self.pylast_logger.setLevel("WARNING")
 
         app_name_text = os.path.basename(__file__).replace(".py", "")
-        release_version = os.environ.get("RELEASE_VERSION", "unknown")
+        release_version = get_env_value("release_version", "unknown") or "unknown"
         self.sonobarr_logger.warning(f"{'*' * 50}\n")
         self.sonobarr_logger.warning(f"{app_name_text} Version: {release_version}\n")
         self.sonobarr_logger.warning(f"{'*' * 50}")
@@ -141,11 +252,8 @@ class DataHandler:
 
     def _env(self, key: str) -> str:
         # Prefer existing lowercase usage, but accept UPPERCASE too
-        for candidate in (key, key.upper()):
-            val = os.environ.get(candidate)
-            if val not in (None, ""):
-                return val
-        return ""
+        value = get_env_value(key)
+        return value if value is not None else ""
 
     # Session helpers -----------------------------------------------------
     def ensure_session(self, sid: str, user_id: Optional[int] = None) -> SessionState:
