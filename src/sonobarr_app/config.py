@@ -7,9 +7,10 @@ from typing import Optional
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = PROJECT_ROOT / "templates"
 STATIC_DIR = PROJECT_ROOT / "static"
-CONFIG_DIR = PROJECT_ROOT / "config"
-CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-DB_PATH = CONFIG_DIR / "app.db"
+CONFIG_DIR_PATH = PROJECT_ROOT / "config"
+CONFIG_DIR_PATH.mkdir(parents=True, exist_ok=True)
+DB_PATH = CONFIG_DIR_PATH / "app.db"
+SETTINGS_FILE_PATH = CONFIG_DIR_PATH / "settings_config.json"
 
 
 def get_env_value(key: str, default: Optional[str] = None) -> Optional[str]:
@@ -68,5 +69,5 @@ class Config:
     GITHUB_USER_AGENT = get_env_value("github_user_agent", "sonobarr-app")
     RELEASE_CACHE_TTL_SECONDS = _get_int("release_cache_ttl_seconds", 60 * 60)
 
-    CONFIG_DIR = str(CONFIG_DIR)
-    SETTINGS_FILE = str(CONFIG_DIR / "settings_config.json")
+    CONFIG_DIR = str(CONFIG_DIR_PATH)
+    SETTINGS_FILE = str(SETTINGS_FILE_PATH)
