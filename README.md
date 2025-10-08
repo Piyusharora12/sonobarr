@@ -95,7 +95,7 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
    mkdir -p config
    sudo chown -R 1000:1000 config
    ````
-   > On first boot the container creates /sonobarr/config/migrations`, seeds the database, and runs all migrations automatically.
+   > On first boot the container creates `/sonobarr/config/migrations`, seeds the database, and runs all migrations automatically.
 5. Start Sonobarr:
    ```bash
    docker compose up -d
@@ -146,6 +146,7 @@ All variables can be supplied in lowercase (preferred for `.env`) or uppercase (
 | `sonobarr_superadmin_display_name` | `Super Admin` | Friendly display name shown in the UI. |
 | `sonobarr_superadmin_reset` | `false` | Set to `true` **once** to reapply the bootstrap credentials on next start. |
 | `release_version` | `unknown` | Populated automatically inside the Docker image; shown in the footer. No need to set manually. |
+| `sonobarr_config_dir` | `/sonobarr/config` | Override where Sonobarr writes `app.db`, `settings_config.json`, and migrations. |
 
 > ℹ️ `secret_key` is mandatory. If missing, the app refuses to boot to prevent insecure session cookies. With Docker Compose, make sure the key exists in `.env` and that `.env` is declared via `env_file:` as shown above.
 

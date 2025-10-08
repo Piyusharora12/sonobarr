@@ -5,9 +5,12 @@ from pathlib import Path
 from typing import Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+APP_ROOT = PROJECT_ROOT.parent
 TEMPLATE_DIR = PROJECT_ROOT / "templates"
 STATIC_DIR = PROJECT_ROOT / "static"
-CONFIG_DIR_PATH = PROJECT_ROOT / "config"
+
+_CONFIG_DIR_OVERRIDE = os.environ.get("sonobarr_config_dir") or os.environ.get("SONOBARR_CONFIG_DIR")
+CONFIG_DIR_PATH = Path(_CONFIG_DIR_OVERRIDE) if _CONFIG_DIR_OVERRIDE else APP_ROOT / "config"
 CONFIG_DIR_PATH.mkdir(parents=True, exist_ok=True)
 DB_PATH = CONFIG_DIR_PATH / "app.db"
 SETTINGS_FILE_PATH = CONFIG_DIR_PATH / "settings_config.json"
