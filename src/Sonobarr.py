@@ -60,12 +60,30 @@ CONFIG_DIR = os.path.join(ROOT_DIR, "config")
 os.makedirs(CONFIG_DIR, exist_ok=True)
 DB_PATH = os.path.join(CONFIG_DIR, "app.db")
 
+def get_env_value(key: str, default: Optional[str] = None) -> Optional[str]:
+    """Retrieve an environment variable preferring lowercase naming."""
+    candidates: List[str] = []
+    for candidate in (key, key.lower(), key.upper()):
+        if candidate not in candidates:
+            candidates.append(candidate)
+    for candidate in candidates:
+        value = os.environ.get(candidate)
+        if value not in (None, ""):
+            return value
+    return default
+
+
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-me")
+secret_key = get_env_value("secret_key")
+if not secret_key:
+    raise RuntimeError(
+        "SECRET_KEY environment variable is required. Set 'secret_key' (preferred) or 'SECRET_KEY'."
+    )
+app.config["SECRET_KEY"] = secret_key
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
-app.config["APP_VERSION"] = os.environ.get("RELEASE_VERSION") or os.environ.get("release_version") or "unknown"
+app.config["APP_VERSION"] = get_env_value("release_version", "unknown") or "unknown"
 app.config["REPO_URL"] = GITHUB_REPO_URL
 
 
@@ -215,7 +233,7 @@ class DataHandler:
         self.pylast_logger.setLevel("WARNING")
 
         app_name_text = os.path.basename(__file__).replace(".py", "")
-        release_version = os.environ.get("RELEASE_VERSION", "unknown")
+        release_version = get_env_value("release_version", "unknown") or "unknown"
         self.sonobarr_logger.warning(f"{'*' * 50}\n")
         self.sonobarr_logger.warning(f"{app_name_text} Version: {release_version}\n")
         self.sonobarr_logger.warning(f"{'*' * 50}")
@@ -234,11 +252,8 @@ class DataHandler:
 
     def _env(self, key: str) -> str:
         # Prefer existing lowercase usage, but accept UPPERCASE too
-        for candidate in (key, key.upper()):
-            val = os.environ.get(candidate)
-            if val not in (None, ""):
-                return val
-        return ""
+        value = get_env_value(key)
+        return value if value is not None else ""
 
     # Session helpers -----------------------------------------------------
     def ensure_session(self, sid: str, user_id: Optional[int] = None) -> SessionState:
