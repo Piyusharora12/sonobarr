@@ -36,7 +36,9 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
 - 🎧 **Preview & bio panels** – jump straight into YouTube or iTunes previews and read artist bios.
 - ⚡️ **Real-time UX** – Socket.IO pushes new cards, status updates, and toast notifications instantly.
 - 👥 **Role-based access** – built-in authentication plus an admin-only settings & user management area.
-- 🔄 **Update awareness** – footer badge compares your container version with the latest GitHub release.
+- 🔒 **Secure forms** – CSRF protection and stricter cookie settings keep sessions and admin actions safe.
+- 🔔 **Update awareness** – footer badge compares your container version with the latest GitHub release.
+-- 🧱 **Zero touch migrations** – database schema managed byFlask-Migrate and applied automatically on boot.
 - 🐳 **Docker-first deployment** – official image on GHCR, mountable config volume, healthy defaults.
 
 ---
@@ -92,7 +94,8 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
    ```bash
    mkdir -p config
    sudo chown -R 1000:1000 config
-   ```
+   ````
+   > On first boot the container creates /sonobarr/config/migrations`, seeds the database, and runs all migrations automatically.
 5. Start Sonobarr:
    ```bash
    docker compose up -d
