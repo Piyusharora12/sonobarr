@@ -114,23 +114,59 @@ function show_audio_modal_loading(artistName) {
 	ensure_audio_modal_visible();
 }
 
-function update_audio_modal_content(artist, track, videoId) {
+function update_audio_modal_content(payload) {
 	var bodyEl = document.getElementById('audio-player-modal-body');
 	var titleEl = document.getElementById('audio-player-modal-label');
-	var safeArtist = escape_html(artist);
-	var safeTrack = escape_html(track);
-	var safeVideoId = encodeURIComponent(videoId);
+	var artistName = payload && payload.artist ? payload.artist : '';
+	var trackName = payload && payload.track ? payload.track : '';
+
 	if (titleEl) {
-		titleEl.textContent = `${artist} – ${track}`;
+		if (artistName && trackName) {
+			titleEl.textContent = `${artistName} – ${trackName}`;
+		} else {
+			titleEl.textContent = artistName || trackName || 'Preview Player';
+		}
 	}
-	if (bodyEl) {
+
+	if (!bodyEl) {
+		return;
+	}
+
+	if (payload && payload.videoId) {
+		var safeVideoId = encodeURIComponent(payload.videoId);
+		var safeTitle = escape_html(
+			`${artistName || 'Unknown artist'} – ${
+				trackName || 'Unknown track'
+			}`
+		);
 		bodyEl.innerHTML = `
             <div class="ratio ratio-16x9">
-                <iframe src="https://www.youtube.com/embed/${safeVideoId}?autoplay=1" title="${safeArtist} – ${safeTrack}"
+                <iframe src="https://www.youtube.com/embed/${safeVideoId}?autoplay=1" title="${safeTitle}"
                     allow="autoplay; encrypted-media" allowfullscreen></iframe>
             </div>
         `;
+	} else if (payload && payload.previewUrl) {
+		var safePreviewUrl = encodeURI(payload.previewUrl);
+		var sourceLabel =
+			payload.source === 'itunes'
+				? 'Preview via Apple Music'
+				: 'Audio preview';
+		bodyEl.innerHTML = `
+            <div>
+                <audio controls autoplay class="w-100" src="${safePreviewUrl}">
+                    Your browser does not support audio playback.
+                </audio>
+                <p class="mt-2 mb-0 text-muted small">${escape_html(
+					sourceLabel
+				)}</p>
+            </div>
+        `;
+	} else {
+		bodyEl.innerHTML = `<div class="alert alert-warning mb-0">${escape_html(
+			'Sample unavailable'
+		)}</div>`;
 	}
+
 	ensure_audio_modal_visible();
 }
 
@@ -668,10 +704,13 @@ function listenSampleReq(artist_name) {
 }
 
 socket.on('prehear_result', function (data) {
-	if (data.videoId) {
-		update_audio_modal_content(data.artist, data.track, data.videoId);
+	if (data && (data.videoId || data.previewUrl)) {
+		update_audio_modal_content(data);
 	} else {
-		var message = data.error || 'No YouTube video found for this artist.';
+		var message =
+			data && data.error
+				? data.error
+				: 'No YouTube or audio preview found.';
 		show_audio_modal_error(message);
 		show_toast('No sample found', message);
 	}
