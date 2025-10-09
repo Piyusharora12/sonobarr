@@ -20,6 +20,7 @@ var lidarr_sidebar = document.getElementById('lidarr-sidebar');
 
 var save_message = document.getElementById('save-message');
 var save_changes_button = document.getElementById('save-changes-button');
+var settings_form = document.getElementById('settings-form');
 const lidarr_address = document.getElementById('lidarr-address');
 const lidarr_api_key = document.getElementById('lidarr-api-key');
 const root_folder_path = document.getElementById('root-folder-path');
@@ -570,163 +571,220 @@ if (load_more_button) {
 	});
 }
 
-if (save_changes_button && config_modal) {
-	save_changes_button.addEventListener('click', () => {
+function build_settings_payload() {
+	return {
+		lidarr_address: lidarr_address ? lidarr_address.value : '',
+		lidarr_api_key: lidarr_api_key ? lidarr_api_key.value : '',
+		root_folder_path: root_folder_path ? root_folder_path.value : '',
+		youtube_api_key: youtube_api_key ? youtube_api_key.value : '',
+		openai_api_key: openai_api_key_input ? openai_api_key_input.value : '',
+		openai_model: openai_model_input ? openai_model_input.value : '',
+		openai_max_seed_artists: openai_max_seed_artists_input
+			? openai_max_seed_artists_input.value
+			: '',
+		similar_artist_batch_size: similar_artist_batch_size_input
+			? similar_artist_batch_size_input.value
+			: '',
+		quality_profile_id: quality_profile_id_input
+			? quality_profile_id_input.value
+			: '',
+		metadata_profile_id: metadata_profile_id_input
+			? metadata_profile_id_input.value
+			: '',
+		lidarr_api_timeout: lidarr_api_timeout_input
+			? lidarr_api_timeout_input.value
+			: '',
+		fallback_to_top_result: fallback_to_top_result_checkbox
+			? fallback_to_top_result_checkbox.checked
+			: false,
+		search_for_missing_albums: search_for_missing_albums_checkbox
+			? search_for_missing_albums_checkbox.checked
+			: false,
+		dry_run_adding_to_lidarr: dry_run_adding_to_lidarr_checkbox
+			? dry_run_adding_to_lidarr_checkbox.checked
+			: false,
+		auto_start: auto_start_checkbox ? auto_start_checkbox.checked : false,
+		auto_start_delay: auto_start_delay_input
+			? auto_start_delay_input.value
+			: '',
+		last_fm_api_key: last_fm_api_key_input
+			? last_fm_api_key_input.value
+			: '',
+		last_fm_api_secret: last_fm_api_secret_input
+			? last_fm_api_secret_input.value
+			: '',
+	};
+}
+
+function populate_settings_form(settings) {
+	if (!settings) {
+		return;
+	}
+	if (lidarr_address) {
+		lidarr_address.value = settings.lidarr_address || '';
+	}
+	if (lidarr_api_key) {
+		lidarr_api_key.value = settings.lidarr_api_key || '';
+	}
+	if (root_folder_path) {
+		root_folder_path.value = settings.root_folder_path || '';
+	}
+	if (youtube_api_key) {
+		youtube_api_key.value = settings.youtube_api_key || '';
+	}
+	if (quality_profile_id_input) {
+		const qualityProfile = settings.quality_profile_id;
+		quality_profile_id_input.value =
+			qualityProfile === undefined || qualityProfile === null
+				? ''
+				: qualityProfile;
+	}
+	if (metadata_profile_id_input) {
+		const metadataProfile = settings.metadata_profile_id;
+		metadata_profile_id_input.value =
+			metadataProfile === undefined || metadataProfile === null
+				? ''
+				: metadataProfile;
+	}
+	if (lidarr_api_timeout_input) {
+		const apiTimeout = settings.lidarr_api_timeout;
+		lidarr_api_timeout_input.value =
+			apiTimeout === undefined || apiTimeout === null ? '' : apiTimeout;
+	}
+	if (fallback_to_top_result_checkbox) {
+		fallback_to_top_result_checkbox.checked = Boolean(
+			settings.fallback_to_top_result
+		);
+	}
+	if (search_for_missing_albums_checkbox) {
+		search_for_missing_albums_checkbox.checked = Boolean(
+			settings.search_for_missing_albums
+		);
+	}
+	if (dry_run_adding_to_lidarr_checkbox) {
+		dry_run_adding_to_lidarr_checkbox.checked = Boolean(
+			settings.dry_run_adding_to_lidarr
+		);
+	}
+	if (similar_artist_batch_size_input) {
+		const batchSize = settings.similar_artist_batch_size;
+		similar_artist_batch_size_input.value =
+			batchSize === undefined || batchSize === null ? '' : batchSize;
+	}
+	if (auto_start_checkbox) {
+		auto_start_checkbox.checked = Boolean(settings.auto_start);
+	}
+	if (auto_start_delay_input) {
+		const autoStartDelay = settings.auto_start_delay;
+		auto_start_delay_input.value =
+			autoStartDelay === undefined || autoStartDelay === null
+				? ''
+				: autoStartDelay;
+	}
+	if (last_fm_api_key_input) {
+		last_fm_api_key_input.value = settings.last_fm_api_key || '';
+	}
+	if (last_fm_api_secret_input) {
+		last_fm_api_secret_input.value = settings.last_fm_api_secret || '';
+	}
+	if (openai_api_key_input) {
+		openai_api_key_input.value = settings.openai_api_key || '';
+	}
+	if (openai_model_input) {
+		openai_model_input.value = settings.openai_model || '';
+	}
+	if (openai_max_seed_artists_input) {
+		const maxSeedArtists = settings.openai_max_seed_artists;
+		openai_max_seed_artists_input.value =
+			maxSeedArtists === undefined || maxSeedArtists === null
+				? ''
+				: maxSeedArtists;
+	}
+}
+
+function handle_settings_saved(payload) {
+	if (save_changes_button) {
+		save_changes_button.disabled = false;
+	}
+	if (save_message) {
+		save_message.classList.remove('alert-danger');
+		if (!save_message.classList.contains('alert-success')) {
+			save_message.classList.add('alert-success');
+		}
+		save_message.classList.remove('d-none');
+		save_message.textContent =
+			(payload && payload.message) || 'Settings saved successfully.';
+	}
+	show_toast(
+		'Settings saved',
+		(payload && payload.message) || 'Configuration updated successfully.'
+	);
+}
+
+function handle_settings_save_error(payload) {
+	if (save_changes_button) {
+		save_changes_button.disabled = false;
+	}
+	const message =
+		(payload && payload.message) ||
+		'Saving settings failed. Check the logs for more details.';
+	if (save_message) {
+		save_message.classList.remove('d-none');
+		save_message.classList.remove('alert-success');
+		save_message.classList.add('alert-danger');
+		save_message.textContent = message;
+	}
+	show_toast('Settings error', message);
+}
+
+function reset_save_message() {
+	if (!save_message) {
+		return;
+	}
+	save_message.classList.add('d-none');
+	save_message.classList.remove('alert-danger');
+	if (!save_message.classList.contains('alert-success')) {
+		save_message.classList.add('alert-success');
+	}
+	save_message.textContent = 'Settings saved successfully.';
+}
+
+if (settings_form && config_modal) {
+	settings_form.addEventListener('submit', (event) => {
+		event.preventDefault();
 		if (!socket.connected) {
 			show_toast('Connection Lost', 'Please reconnect to continue.');
 			return;
 		}
-
-		const payload = {
-			lidarr_address: lidarr_address ? lidarr_address.value : '',
-			lidarr_api_key: lidarr_api_key ? lidarr_api_key.value : '',
-			root_folder_path: root_folder_path ? root_folder_path.value : '',
-			youtube_api_key: youtube_api_key ? youtube_api_key.value : '',
-			openai_api_key: openai_api_key_input
-				? openai_api_key_input.value
-				: '',
-			openai_model: openai_model_input ? openai_model_input.value : '',
-			openai_max_seed_artists: openai_max_seed_artists_input
-				? openai_max_seed_artists_input.value
-				: '',
-			similar_artist_batch_size: similar_artist_batch_size_input
-				? similar_artist_batch_size_input.value
-				: '',
-			quality_profile_id: quality_profile_id_input
-				? quality_profile_id_input.value
-				: '',
-			metadata_profile_id: metadata_profile_id_input
-				? metadata_profile_id_input.value
-				: '',
-			lidarr_api_timeout: lidarr_api_timeout_input
-				? lidarr_api_timeout_input.value
-				: '',
-			fallback_to_top_result: fallback_to_top_result_checkbox
-				? fallback_to_top_result_checkbox.checked
-				: false,
-			search_for_missing_albums: search_for_missing_albums_checkbox
-				? search_for_missing_albums_checkbox.checked
-				: false,
-			dry_run_adding_to_lidarr: dry_run_adding_to_lidarr_checkbox
-				? dry_run_adding_to_lidarr_checkbox.checked
-				: false,
-			auto_start: auto_start_checkbox
-				? auto_start_checkbox.checked
-				: false,
-			auto_start_delay: auto_start_delay_input
-				? auto_start_delay_input.value
-				: '',
-			last_fm_api_key: last_fm_api_key_input
-				? last_fm_api_key_input.value
-				: '',
-			last_fm_api_secret: last_fm_api_secret_input
-				? last_fm_api_secret_input.value
-				: '',
-		};
-
-		socket.emit('update_settings', payload);
-		if (save_message) {
-			save_message.style.display = 'block';
-			setTimeout(function () {
-				save_message.style.display = 'none';
-			}, 1000);
+		reset_save_message();
+		if (save_changes_button) {
+			save_changes_button.disabled = true;
 		}
+		socket.emit('update_settings', build_settings_payload());
 	});
 
-	config_modal.addEventListener('show.bs.modal', function () {
+	const handle_modal_show = () => {
+		reset_save_message();
+		if (save_changes_button) {
+			save_changes_button.disabled = false;
+		}
+		socket.on('settingsLoaded', populate_settings_form);
 		socket.emit('load_settings');
+	};
 
-		function handle_settings_loaded(settings) {
-			if (lidarr_address) {
-				lidarr_address.value = settings.lidarr_address || '';
-			}
-			if (lidarr_api_key) {
-				lidarr_api_key.value = settings.lidarr_api_key || '';
-			}
-			if (root_folder_path) {
-				root_folder_path.value = settings.root_folder_path || '';
-			}
-			if (youtube_api_key) {
-				youtube_api_key.value = settings.youtube_api_key || '';
-			}
-			if (quality_profile_id_input) {
-				const qualityProfile = settings.quality_profile_id;
-				quality_profile_id_input.value =
-					qualityProfile === undefined || qualityProfile === null
-						? ''
-						: qualityProfile;
-			}
-			if (metadata_profile_id_input) {
-				const metadataProfile = settings.metadata_profile_id;
-				metadata_profile_id_input.value =
-					metadataProfile === undefined || metadataProfile === null
-						? ''
-						: metadataProfile;
-			}
-			if (lidarr_api_timeout_input) {
-				const apiTimeout = settings.lidarr_api_timeout;
-				lidarr_api_timeout_input.value =
-					apiTimeout === undefined || apiTimeout === null
-						? ''
-						: apiTimeout;
-			}
-			if (fallback_to_top_result_checkbox) {
-				fallback_to_top_result_checkbox.checked = Boolean(
-					settings.fallback_to_top_result
-				);
-			}
-			if (search_for_missing_albums_checkbox) {
-				search_for_missing_albums_checkbox.checked = Boolean(
-					settings.search_for_missing_albums
-				);
-			}
-			if (dry_run_adding_to_lidarr_checkbox) {
-				dry_run_adding_to_lidarr_checkbox.checked = Boolean(
-					settings.dry_run_adding_to_lidarr
-				);
-			}
-			if (similar_artist_batch_size_input) {
-				const batchSize = settings.similar_artist_batch_size;
-				similar_artist_batch_size_input.value =
-					batchSize === undefined || batchSize === null
-						? ''
-						: batchSize;
-			}
-			if (auto_start_checkbox) {
-				auto_start_checkbox.checked = Boolean(settings.auto_start);
-			}
-			if (auto_start_delay_input) {
-				const autoStartDelay = settings.auto_start_delay;
-				auto_start_delay_input.value =
-					autoStartDelay === undefined || autoStartDelay === null
-						? ''
-						: autoStartDelay;
-			}
-			if (last_fm_api_key_input) {
-				last_fm_api_key_input.value = settings.last_fm_api_key || '';
-			}
-			if (last_fm_api_secret_input) {
-				last_fm_api_secret_input.value =
-					settings.last_fm_api_secret || '';
-			}
-			if (openai_api_key_input) {
-				openai_api_key_input.value = settings.openai_api_key || '';
-			}
-			if (openai_model_input) {
-				openai_model_input.value = settings.openai_model || '';
-			}
-			if (openai_max_seed_artists_input) {
-				const maxSeedArtists = settings.openai_max_seed_artists;
-				openai_max_seed_artists_input.value =
-					maxSeedArtists === undefined || maxSeedArtists === null
-						? ''
-						: maxSeedArtists;
-			}
-			socket.off('settingsLoaded', handle_settings_loaded);
+	const handle_modal_hidden = () => {
+		socket.off('settingsLoaded', populate_settings_form);
+		reset_save_message();
+		if (save_changes_button) {
+			save_changes_button.disabled = false;
 		}
+	};
 
-		socket.on('settingsLoaded', handle_settings_loaded);
-	});
+	config_modal.addEventListener('show.bs.modal', handle_modal_show);
+	config_modal.addEventListener('hidden.bs.modal', handle_modal_hidden);
+
+	socket.on('settingsSaved', handle_settings_saved);
+	socket.on('settingsSaveError', handle_settings_save_error);
 }
 
 lidarr_sidebar.addEventListener('show.bs.offcanvas', function (event) {

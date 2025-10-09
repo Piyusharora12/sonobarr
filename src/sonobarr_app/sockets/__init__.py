@@ -148,8 +148,25 @@ def register_socketio_handlers(socketio: SocketIO, data_handler) -> None:
                 room=request.sid,
             )
             return
-        data_handler.update_settings(payload)
-        data_handler.save_config_to_file()
+        try:
+            data_handler.update_settings(payload)
+            data_handler.save_config_to_file()
+            data_handler.load_settings(request.sid)
+            socketio.emit(
+                "settingsSaved",
+                {"message": "Configuration updated successfully."},
+                room=request.sid,
+            )
+        except Exception as exc:  # pragma: no cover - runtime guard
+            # Ensure exceptions are logged and surfaced to the UI without leaking sensitive details
+            data_handler.logger.exception("Failed to persist settings: %s", exc)
+            socketio.emit(
+                "settingsSaveError",
+                {
+                    "message": "Saving settings failed. Check the server logs for details.",
+                },
+                room=request.sid,
+            )
 
     @socketio.on("preview_req")
     def handle_preview(raw_artist_name: str):
