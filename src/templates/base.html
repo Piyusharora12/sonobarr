@@ -15,6 +15,11 @@
 </button>
 {% endblock %}
 {% block topbar_actions %}
+<button class="btn btn-outline-light btn-sm me-2" id="ai-assist-button" type="button"
+        data-bs-toggle="modal" data-bs-target="#ai-helper-modal">
+  <i class="fa fa-magic me-1"></i>
+  AI Assist
+</button>
 <button class="btn btn-outline-light btn-sm d-none" id="load-more-btn" type="button">
   Load More
 </button>
@@ -58,6 +63,15 @@
 	  <div class="form-group-modal my-3">
             <label for="youtube-api-key">YouTube API Key:</label>
             <input type="text" class="form-control" id="youtube-api-key" placeholder="Enter YouTUbe API Key">
+          </div>
+          <div class="form-group-modal my-3">
+            <label for="openai-api-key">OpenAI API Key:</label>
+            <input type="text" class="form-control" id="openai-api-key" placeholder="Enter OpenAI API Key">
+            <small class="form-text text-muted">Leave blank to disable AI-powered discovery.</small>
+          </div>
+          <div class="form-group-modal my-3">
+            <label for="openai-model">OpenAI Model (optional):</label>
+            <input type="text" class="form-control" id="openai-model" placeholder="e.g., gpt-4o-mini">
           </div>
         </div>
         <div class="modal-footer">
@@ -158,6 +172,38 @@
           </div>
         </div>
       </template>
+    </div>
+  </div>
+
+  <!-- AI Helper Modal -->
+  <div class="modal fade" id="ai-helper-modal" tabindex="-1" aria-labelledby="ai-helper-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <form id="ai-helper-form">
+          <div class="modal-header">
+            <h5 class="modal-title" id="ai-helper-title">AI Music Assistant</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p class="text-muted small mb-3">
+              Describe the vibe, genres, or artists you're looking for. We'll use AI to suggest new artists to explore.
+            </p>
+            <div class="mb-3">
+              <label for="ai-helper-input" class="form-label">What should we find?</label>
+              <textarea class="form-control" id="ai-helper-input" rows="4" placeholder="e.g., Dreamy synth-pop similar to M83 and Beach House"></textarea>
+            </div>
+            <div id="ai-helper-error" class="alert alert-danger d-none" role="alert"></div>
+            <div id="ai-helper-results" class="alert alert-info d-none" role="alert"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="submit" id="ai-helper-submit" class="btn btn-primary">
+              <span class="spinner-border spinner-border-sm me-2 d-none" id="ai-helper-spinner" role="status" aria-hidden="true"></span>
+              Ask AI
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 

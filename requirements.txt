@@ -12,3 +12,4 @@ musicbrainzngs
 thefuzz
 Unidecode
 pylast
+openai

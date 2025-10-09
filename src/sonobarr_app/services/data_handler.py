@@ -20,6 +20,7 @@ from thefuzz import fuzz
 from unidecode import unidecode
 
 from ..config import get_env_value
+from .openai_client import DEFAULT_MAX_SEED_ARTISTS, OpenAIRecommender
 
 
 @dataclass
@@ -83,6 +84,10 @@ class DataHandler:
         settings_path = app_config.get("SETTINGS_FILE")
         self.settings_config_file = Path(settings_path) if settings_path else self.config_folder / "settings_config.json"
         self.similar_artist_batch_size = 10
+        self.openai_api_key = ""
+        self.openai_model = ""
+        self.openai_max_seed_artists = DEFAULT_MAX_SEED_ARTISTS
+        self.openai_recommender: Optional[OpenAIRecommender] = None
 
         self.load_environ_or_config_settings()
 
@@ -230,6 +235,75 @@ class DataHandler:
             )
             return
 
+        self.socketio.emit("clear", room=sid)
+        payload = {
+            "Status": "Success",
+            "Data": session.lidarr_items,
+            "Running": session.running,
+        }
+        self.socketio.emit("lidarr_sidebar_update", payload, room=sid)
+
+        self.prepare_similar_artist_candidates(session)
+        with session.search_lock:
+            self.load_similar_artist_batch(session, sid)
+
+    def ai_prompt(self, sid: str, prompt: str) -> None:
+        session = self.ensure_session(sid)
+        prompt_text = (prompt or "").strip()
+        if not prompt_text:
+            self.socketio.emit(
+                "ai_prompt_error",
+                {
+                    "message": "Describe what kind of music you're after so the AI assistant can help.",
+                },
+                room=sid,
+            )
+            return
+
+        if not self.openai_recommender:
+            self.socketio.emit(
+                "ai_prompt_error",
+                {
+                    "message": "AI assistant isn't configured yet. Add an OpenAI API key in settings.",
+                },
+                room=sid,
+            )
+            return
+
+        with self.cache_lock:
+            library_artists = list(self.cached_lidarr_names)
+
+        try:
+            seeds = self.openai_recommender.generate_seed_artists(prompt_text, library_artists)
+        except Exception as exc:  # pragma: no cover - network errors
+            self.logger.error("AI prompt failed: %s", exc)
+            self.socketio.emit(
+                "ai_prompt_error",
+                {
+                    "message": "We couldn't reach the AI assistant. Please try again in a moment.",
+                },
+                room=sid,
+            )
+            return
+
+        if not seeds:
+            self.socketio.emit(
+                "ai_prompt_error",
+                {
+                    "message": "The AI couldn't suggest any artists from that request. Try adding genre or artist hints.",
+                },
+                room=sid,
+            )
+            return
+
+        session.prepare_for_search()
+        if not session.lidarr_items:
+            session.lidarr_items = self._copy_cached_lidarr_items()
+        if not session.cleaned_lidarr_items:
+            session.cleaned_lidarr_items = self._copy_cached_cleaned_names()
+        session.artists_to_use_in_search = seeds
+
+        self.socketio.emit("ai_prompt_ack", {"seeds": seeds}, room=sid)
         self.socketio.emit("clear", room=sid)
         payload = {
             "Status": "Success",
@@ -533,6 +607,8 @@ class DataHandler:
                 "lidarr_api_key": self.lidarr_api_key,
                 "root_folder_path": self.root_folder_path,
                 "youtube_api_key": self.youtube_api_key,
+                "openai_api_key": self.openai_api_key,
+                "openai_model": self.openai_model,
                 "similar_artist_batch_size": self.similar_artist_batch_size,
             }
             self.socketio.emit("settingsLoaded", data, room=sid)
@@ -545,6 +621,8 @@ class DataHandler:
             self.lidarr_api_key = data["lidarr_api_key"].strip()
             self.root_folder_path = data["root_folder_path"].strip()
             self.youtube_api_key = data.get("youtube_api_key", "").strip()
+            self.openai_api_key = data.get("openai_api_key", "").strip()
+            self.openai_model = data.get("openai_model", "").strip()
             batch_size = data.get("similar_artist_batch_size")
             if batch_size is not None:
                 try:
@@ -553,6 +631,7 @@ class DataHandler:
                     batch_value = self.similar_artist_batch_size
                 if batch_value > 0:
                     self.similar_artist_batch_size = batch_value
+            self._configure_openai_client()
         except Exception as exc:
             self.logger.error(f"Failed to update settings: {exc}")
 
@@ -690,6 +769,32 @@ class DataHandler:
         self.socketio.emit("prehear_result", result, room=sid)
 
     # Utilities -------------------------------------------------------
+    def _configure_openai_client(self) -> None:
+        api_key = (self.openai_api_key or "").strip()
+        if not api_key:
+            self.openai_recommender = None
+            return
+
+        model = (self.openai_model or "").strip() or None
+        max_seeds = self.openai_max_seed_artists
+        try:
+            max_seeds_int = int(max_seeds)
+        except (TypeError, ValueError):
+            max_seeds_int = DEFAULT_MAX_SEED_ARTISTS
+        if max_seeds_int <= 0:
+            max_seeds_int = DEFAULT_MAX_SEED_ARTISTS
+        self.openai_max_seed_artists = max_seeds_int
+
+        try:
+            self.openai_recommender = OpenAIRecommender(
+                api_key=api_key,
+                model=model,
+                max_seed_artists=max_seeds_int,
+            )
+        except Exception as exc:  # pragma: no cover - network/config errors
+            self.logger.error("Failed to initialize OpenAI client: %s", exc)
+            self.openai_recommender = None
+
     def format_numbers(self, count: int) -> str:
         if count >= 1_000_000:
             return f"{count / 1_000_000:.1f}M"
@@ -721,6 +826,9 @@ class DataHandler:
                         "auto_start_delay": self.auto_start_delay,
                         "youtube_api_key": self.youtube_api_key,
                         "similar_artist_batch_size": self.similar_artist_batch_size,
+                        "openai_api_key": self.openai_api_key,
+                        "openai_model": self.openai_model,
+                        "openai_max_seed_artists": self.openai_max_seed_artists,
                     },
                     json_file,
                     indent=4,
@@ -782,6 +890,9 @@ class DataHandler:
             "auto_start_delay": 60,
             "youtube_api_key": "",
             "similar_artist_batch_size": 10,
+            "openai_api_key": "",
+            "openai_model": "",
+            "openai_max_seed_artists": DEFAULT_MAX_SEED_ARTISTS,
             "sonobarr_superadmin_username": "admin",
             "sonobarr_superadmin_password": "",
             "sonobarr_superadmin_display_name": "Super Admin",
@@ -822,6 +933,10 @@ class DataHandler:
         self.app_url = self._env("app_url")
         self.last_fm_api_key = self._env("last_fm_api_key")
         self.last_fm_api_secret = self._env("last_fm_api_secret")
+        self.openai_api_key = self._env("openai_api_key")
+        self.openai_model = self._env("openai_model")
+        openai_max_seed = self._env("openai_max_seed_artists")
+        self.openai_max_seed_artists = int(openai_max_seed) if openai_max_seed else ""
 
         auto_start = self._env("auto_start")
         self.auto_start = auto_start.lower() == "true" if auto_start != "" else ""
@@ -867,8 +982,16 @@ class DataHandler:
             self.similar_artist_batch_size = default_settings["similar_artist_batch_size"]
 
         try:
+            self.openai_max_seed_artists = int(self.openai_max_seed_artists)
+        except (TypeError, ValueError):
+            self.openai_max_seed_artists = default_settings["openai_max_seed_artists"]
+        if self.openai_max_seed_artists <= 0:
+            self.openai_max_seed_artists = default_settings["openai_max_seed_artists"]
+
+        try:
             self.lidarr_api_timeout = float(self.lidarr_api_timeout)
         except (TypeError, ValueError):
             self.lidarr_api_timeout = float(default_settings["lidarr_api_timeout"])
 
+        self._configure_openai_client()
         self.save_config_to_file()

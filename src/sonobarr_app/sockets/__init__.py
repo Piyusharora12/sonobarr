@@ -63,6 +63,24 @@ def register_socketio_handlers(socketio: SocketIO, data_handler) -> None:
         )
         thread.start()
 
+    @socketio.on("ai_prompt_req")
+    def handle_ai_prompt(payload: Any):
+        if not current_user.is_authenticated:
+            disconnect()
+            return
+        sid = request.sid
+        if isinstance(payload, dict):
+            prompt = payload.get("prompt", "")
+        else:
+            prompt = str(payload or "")
+        thread = threading.Thread(
+            target=data_handler.ai_prompt,
+            args=(sid, prompt),
+            name=f"AIPrompt-{sid}",
+            daemon=True,
+        )
+        thread.start()
+
     @socketio.on("stop_req")
     def handle_stop_req():
         if not current_user.is_authenticated:

@@ -24,6 +24,17 @@ const lidarr_address = document.getElementById('lidarr-address');
 const lidarr_api_key = document.getElementById('lidarr-api-key');
 const root_folder_path = document.getElementById('root-folder-path');
 const youtube_api_key = document.getElementById('youtube-api-key');
+const openai_api_key_input = document.getElementById('openai-api-key');
+const openai_model_input = document.getElementById('openai-model');
+
+const ai_assist_button = document.getElementById('ai-assist-button');
+const ai_helper_modal = document.getElementById('ai-helper-modal');
+const ai_helper_form = document.getElementById('ai-helper-form');
+const ai_helper_input = document.getElementById('ai-helper-input');
+const ai_helper_error = document.getElementById('ai-helper-error');
+const ai_helper_results = document.getElementById('ai-helper-results');
+const ai_helper_submit = document.getElementById('ai-helper-submit');
+const ai_helper_spinner = document.getElementById('ai-helper-spinner');
 
 var lidarr_items = [];
 var socket = io({
@@ -34,6 +45,47 @@ var socket = io({
 let initialLoadComplete = false;
 let initialLoadHasMore = false;
 let loadMorePending = false;
+
+if (ai_helper_modal) {
+	ai_helper_modal.addEventListener('hidden.bs.modal', function () {
+		if (ai_helper_input) {
+			ai_helper_input.value = '';
+		}
+		reset_ai_feedback();
+		set_ai_form_loading(false);
+		if (ai_helper_submit) {
+			ai_helper_submit.blur();
+		}
+	});
+}
+
+if (ai_helper_form) {
+	ai_helper_form.addEventListener('submit', function (event) {
+		event.preventDefault();
+		if (!socket.connected) {
+			show_toast('Connection Lost', 'Please reconnect to continue.');
+			return;
+		}
+		if (!ai_helper_input) {
+			return;
+		}
+		var prompt = ai_helper_input.value.trim();
+		if (!prompt) {
+			if (ai_helper_error) {
+				ai_helper_error.textContent =
+					'Tell us what to search for before asking the AI assistant.';
+				ai_helper_error.classList.remove('d-none');
+			}
+			return;
+		}
+		reset_ai_feedback();
+		set_ai_form_loading(true);
+		begin_ai_discovery_flow();
+		socket.emit('ai_prompt_req', {
+			prompt: prompt,
+		});
+	});
+}
 
 function show_header_spinner() {
 	if (header_spinner) {
@@ -64,6 +116,35 @@ function render_loading_spinner(message) {
             </div>
         </div>
     `;
+}
+
+function reset_ai_feedback() {
+	if (ai_helper_error) {
+		ai_helper_error.textContent = '';
+		ai_helper_error.classList.add('d-none');
+	}
+	if (ai_helper_results) {
+		ai_helper_results.innerHTML = '';
+		ai_helper_results.classList.add('d-none');
+	}
+}
+
+function set_ai_form_loading(isLoading) {
+	if (ai_helper_submit) {
+		ai_helper_submit.disabled = isLoading;
+	}
+	if (ai_helper_spinner) {
+		if (isLoading) {
+			ai_helper_spinner.classList.remove('d-none');
+		} else {
+			ai_helper_spinner.classList.add('d-none');
+		}
+	}
+}
+
+function begin_ai_discovery_flow() {
+	clear_all();
+	show_header_spinner();
 }
 
 function show_modal_with_lock(modalId, onHidden) {
@@ -472,6 +553,10 @@ if (save_changes_button && config_modal) {
 			lidarr_api_key: lidarr_api_key.value,
 			root_folder_path: root_folder_path.value,
 			youtube_api_key: youtube_api_key.value,
+			openai_api_key: openai_api_key_input
+				? openai_api_key_input.value
+				: '',
+			openai_model: openai_model_input ? openai_model_input.value : '',
 		});
 		if (save_message) {
 			save_message.style.display = 'block';
@@ -489,6 +574,12 @@ if (save_changes_button && config_modal) {
 			lidarr_api_key.value = settings.lidarr_api_key;
 			root_folder_path.value = settings.root_folder_path;
 			youtube_api_key.value = settings.youtube_api_key;
+			if (openai_api_key_input) {
+				openai_api_key_input.value = settings.openai_api_key || '';
+			}
+			if (openai_model_input) {
+				openai_model_input.value = settings.openai_model || '';
+			}
 			socket.off('settingsLoaded', handle_settings_loaded);
 		}
 		socket.on('settingsLoaded', handle_settings_loaded);
@@ -603,6 +694,43 @@ socket.on('refresh_artist', (artist) => {
 
 socket.on('more_artists_loaded', function (data) {
 	append_artists(data);
+});
+
+socket.on('ai_prompt_ack', function (payload) {
+	set_ai_form_loading(false);
+	if (payload && Array.isArray(payload.seeds) && payload.seeds.length > 0) {
+		var listItems = payload.seeds
+			.map(function (seed) {
+				return `<li>${escape_html(seed)}</li>`;
+			})
+			.join('');
+		if (ai_helper_results) {
+			ai_helper_results.innerHTML = `<strong>AI picked these seed artists:</strong><ul class="mt-2 mb-0">${listItems}</ul>`;
+			ai_helper_results.classList.remove('d-none');
+		}
+		show_toast(
+			'AI Discovery',
+			'Working from fresh seed artists suggested by the assistant.'
+		);
+	} else if (ai_helper_results) {
+		ai_helper_results.textContent =
+			"AI discovery started. We'll surface artists as soon as we find them.";
+		ai_helper_results.classList.remove('d-none');
+	}
+});
+
+socket.on('ai_prompt_error', function (payload) {
+	set_ai_form_loading(false);
+	var message =
+		payload && payload.message
+			? payload.message
+			: 'We could not complete the AI request right now.';
+	if (ai_helper_error) {
+		ai_helper_error.textContent = message;
+		ai_helper_error.classList.remove('d-none');
+	}
+	hide_header_spinner();
+	show_toast('AI Assistant', message);
 });
 
 // Server signals that initial batches are complete: show the Load More button now

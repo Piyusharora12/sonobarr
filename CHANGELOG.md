@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Added
+- OpenAI-powered "AI Assist" modal that turns natural language prompts into fresh discovery sessions.
+- OpenAI API key/model settings persisted alongside other admin configuration.
+
+### Changed
+- Settings JSON now stores OpenAI configuration metadata.
+
 ## [0.5.0] - 2025-10-08
 ### Added
 - Application factory bootstrapping with modular blueprints, services, and Socket.IO handlers.

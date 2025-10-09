@@ -33,6 +33,7 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
 
 - 🔌 **Lidarr integration** – fetch and cache your monitored artists automatically.
 - 🔍 **Smart discovery** – query Last.fm for related artists, with dedupe and similarity scoring.
+- 🤖 **AI assistant** – describe moods, genres or artists in plain English and let OpenAI pick seed artists for you.
 - 🎧 **Preview & bio panels** – jump straight into YouTube or iTunes previews and read artist bios.
 - ⚡️ **Real-time UX** – Socket.IO pushes new cards, status updates, and toast notifications instantly.
 - 👥 **Role-based access** – built-in authentication plus an admin-only settings & user management area.
@@ -88,6 +89,8 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
    lidarr_api_key=xxxxxxxxxxxxxxxxxxxxxxxx
    last_fm_api_key=xxxxxxxxxxxxxxxxxxxxxxxx
    last_fm_api_secret=xxxxxxxxxxxxxxxxxxxxxxxx
+   # Optional – enables the AI assistant modal
+   # openai_api_key=sk-...
    ```
    > All keys in `.env` are lowercase by convention; the app will happily accept uppercase equivalents if you prefer exporting variables.
 4. Ensure the config directory is writable by the container UID/GID (defaults to `1000:1000`). For Linux hosts:
@@ -138,6 +141,9 @@ All variables can be supplied in lowercase (preferred for `.env`) or uppercase (
 | `last_fm_api_key` | – | Last.fm API key for similarity lookups. |
 | `last_fm_api_secret` | – | Last.fm API secret. |
 | `youtube_api_key` | – | Enables YouTube previews in the “Listen” modal. Optional but recommended. |
+| `openai_api_key` | – | Optional OpenAI key used by the AI Assist modal. Leave empty to disable the feature. |
+| `openai_model` | `gpt-4o-mini` | Override the OpenAI model used for prompts. |
+| `openai_max_seed_artists` | `5` | Maximum number of seed artists returned from each AI prompt. |
 | `similar_artist_batch_size` | `10` | Number of cards sent per batch while streaming results. |
 | `auto_start` | `false` | Automatically start a discovery session on load. |
 | `auto_start_delay` | `60` | Delay (seconds) before auto-start kicks in. |
@@ -170,6 +176,13 @@ Currently relying on manual testing. Contributions adding pytest coverage, espec
 4. Hit **Start**. Sonobarr queues batches of similar artists and streams them to the grid. Cards show genre, popularity, listeners, and a color-coded status LED as well as similarity (according to Last.fm)
 5. Use **Bio** and **Listen** buttons for deeper context. Click **Add to Lidarr** to push the candidate back into your library; feedback appears on the card immediately.
 6. Stop or resume discovery anytime. Toast notifications keep everyone informed when conflicts or errors occur.
+
+### AI-powered prompts
+
+- Click the **AI Assist** button on the top bar to open a prompt modal.
+- Describe the mood, genres, or examples you're craving (e.g. “dreamy synth-pop like M83 but calmer”).
+- Provide an OpenAI API key through the settings modal (or `.env`) to unlock the feature; without a key the assistant stays disabled.
+- The assistant picks a handful of seed artists, kicks off a discovery session automatically, and keeps streaming cards just like a normal Lidarr-driven search.
 
 The footer shows:
 - GitHub repo shortcut.
