@@ -58,6 +58,8 @@ class SessionState:
 
 
 class DataHandler:
+    _version_logged = False
+
     def __init__(self, socketio, logger: Optional[logging.Logger], app_config: Dict[str, Any]) -> None:
         self.socketio = socketio
         self.logger = logger or logging.getLogger("sonobarr")
@@ -68,9 +70,9 @@ class DataHandler:
 
         app_name_text = Path(__file__).name.replace(".py", "")
         release_version = (app_config.get("APP_VERSION") or get_env_value("release_version", "unknown") or "unknown")
-        self.logger.warning(f"{'*' * 50}\n")
-        self.logger.warning(f"{app_name_text} Version: {release_version}\n")
-        self.logger.warning(f"{'*' * 50}")
+        if not DataHandler._version_logged:
+            self.logger.info("%s initialised (version=%s)", app_name_text, release_version)
+            DataHandler._version_logged = True
 
         self.sessions: Dict[str, SessionState] = {}
         self.sessions_lock = threading.Lock()
@@ -275,20 +277,38 @@ class DataHandler:
         with self.cache_lock:
             library_artists = list(self.cached_lidarr_names)
 
+        prompt_preview = prompt_text if len(prompt_text) <= 120 else f"{prompt_text[:117]}..."
+        model_name = getattr(self.openai_recommender, "model", "unknown")
+        timeout_value = getattr(self.openai_recommender, "timeout", None)
+        self.logger.info(
+            "AI prompt started (model=%s, timeout=%s, library_size=%d, prompt=\"%s\")",
+            model_name,
+            timeout_value,
+            len(library_artists),
+            prompt_preview,
+        )
+
+        start_time = time.perf_counter()
         try:
             seeds = self.openai_recommender.generate_seed_artists(prompt_text, library_artists)
         except Exception as exc:  # pragma: no cover - network errors
-            self.logger.error("AI prompt failed: %s", exc)
+            elapsed = time.perf_counter() - start_time
+            self.logger.error("AI prompt failed after %.2fs: %s", elapsed, exc)
+            message = "We couldn't reach the AI assistant. Please try again in a moment."
+            if "timed out" in str(exc).lower():
+                message = "The AI request timed out. Please try again or adjust the prompt."
             self.socketio.emit(
                 "ai_prompt_error",
                 {
-                    "message": "We couldn't reach the AI assistant. Please try again in a moment.",
+                    "message": message,
                 },
                 room=sid,
             )
             return
 
         if not seeds:
+            elapsed = time.perf_counter() - start_time
+            self.logger.info("AI prompt completed in %.2fs but returned no artists", elapsed)
             self.socketio.emit(
                 "ai_prompt_error",
                 {
@@ -297,6 +317,9 @@ class DataHandler:
                 room=sid,
             )
             return
+
+        elapsed = time.perf_counter() - start_time
+        self.logger.info("AI prompt succeeded in %.2fs with %d seed artists", elapsed, len(seeds))
 
         session.prepare_for_search()
         if not session.lidarr_items:

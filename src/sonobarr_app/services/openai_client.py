@@ -8,6 +8,7 @@ from openai import OpenAIError
 
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 DEFAULT_MAX_SEED_ARTISTS = 5
+DEFAULT_OPENAI_TIMEOUT = 60.0
 
 _SYSTEM_PROMPT = (
     "You are Sonobarr's music discovery assistant. "
@@ -25,8 +26,9 @@ class OpenAIRecommender:
         api_key: str,
         model: str | None = None,
         max_seed_artists: int = DEFAULT_MAX_SEED_ARTISTS,
-        timeout: float | None = 30.0,
+        timeout: float | None = DEFAULT_OPENAI_TIMEOUT,
     ) -> None:
+        self.timeout = timeout
         self.client = OpenAI(api_key=api_key, timeout=timeout)
         self.model = model or DEFAULT_OPENAI_MODEL
         self.max_seed_artists = max_seed_artists
@@ -87,17 +89,28 @@ class OpenAIRecommender:
         if temperature_value is not None:
             request_kwargs["temperature"] = temperature_value
 
-        try:
-            response = self.client.chat.completions.create(**request_kwargs)
-        except OpenAIError as exc:  # pragma: no cover - network failure path
-            message = str(exc)
-            if "temperature" in message.lower() and "unsupported" in message.lower() and request_kwargs.pop("temperature", None) is not None:
-                try:
-                    response = self.client.chat.completions.create(**request_kwargs)
-                except OpenAIError as retry_exc:  # pragma: no cover - network failure path
-                    raise RuntimeError(str(retry_exc)) from retry_exc
-            else:
+        attempts = 2
+        last_exc: Optional[Exception] = None
+        for attempt in range(attempts):
+            try:
+                response = self.client.chat.completions.create(**request_kwargs)
+                break
+            except OpenAIError as exc:  # pragma: no cover - network failure path
+                message = str(exc)
+                last_exc = exc
+                if (
+                    "temperature" in message.lower()
+                    and "unsupported" in message.lower()
+                    and request_kwargs.pop("temperature", None) is not None
+                ):
+                    continue
+                if "timed out" in message.lower() and attempt + 1 < attempts:
+                    continue
                 raise RuntimeError(message) from exc
+        else:  # pragma: no cover - defensive
+            if last_exc is not None:
+                raise RuntimeError(str(last_exc)) from last_exc
+            raise RuntimeError("OpenAI request failed without response")
 
         try:
             content = response.choices[0].message.content
