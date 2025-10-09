@@ -435,6 +435,7 @@ function append_artists(artists) {
 		var clone = document.importNode(template.content, true);
 		var artist_col = clone.querySelector('#artist-column');
 		var cardEl = artist_col.querySelector('.artist-card');
+		var statusDot = cardEl ? cardEl.querySelector('.led') : null;
 		var imageContainer = artist_col.querySelector('.artist-img-container');
 		var coverImage = imageContainer
 			? imageContainer.querySelector('.card-img-top')
@@ -513,13 +514,13 @@ function append_artists(artists) {
 		artist_col.querySelector('.followers').textContent = artist.Followers;
 		artist_col.querySelector('.popularity').textContent = artist.Popularity;
 
-		cardEl.classList.remove('status-green', 'status-red', 'status-blue');
+		var statusValue = 'info';
 
 		if (
 			artist.Status === 'Added' ||
 			artist.Status === 'Already in Lidarr'
 		) {
-			cardEl.classList.add('status-green');
+			statusValue = 'success';
 			add_button.classList.remove('btn-primary');
 			add_button.classList.add('btn-secondary');
 			add_button.disabled = true;
@@ -528,13 +529,16 @@ function append_artists(artists) {
 			artist.Status === 'Failed to Add' ||
 			artist.Status === 'Invalid Path'
 		) {
-			cardEl.classList.add('status-red');
+			statusValue = 'danger';
 			add_button.classList.remove('btn-primary');
 			add_button.classList.add('btn-danger');
 			add_button.disabled = true;
 			add_button.textContent = artist.Status;
 		} else {
-			cardEl.classList.add('status-blue');
+			statusValue = 'info';
+		}
+		if (statusDot) {
+			statusDot.dataset.status = statusValue;
 		}
 		artist_row.appendChild(clone);
 	});
@@ -942,19 +946,15 @@ socket.on('refresh_artist', (artist) => {
 		var card_artist_name = titleEl ? titleEl.textContent.trim() : '';
 
 		if (card_artist_name === artist.Name) {
-			cardEl.classList.remove(
-				'status-green',
-				'status-red',
-				'status-blue'
-			);
-
 			var add_button = cardEl.querySelector('.add-to-lidarr-btn');
+			var statusDot = cardEl.querySelector('.led');
+			var statusValue = 'info';
 
 			if (
 				artist.Status === 'Added' ||
 				artist.Status === 'Already in Lidarr'
 			) {
-				cardEl.classList.add('status-green');
+				statusValue = 'success';
 				add_button.classList.remove('btn-primary');
 				add_button.classList.add('btn-secondary');
 				add_button.disabled = true;
@@ -964,14 +964,14 @@ socket.on('refresh_artist', (artist) => {
 				artist.Status === 'Failed to Add' ||
 				artist.Status === 'Invalid Path'
 			) {
-				cardEl.classList.add('status-red');
+				statusValue = 'danger';
 				add_button.classList.remove('btn-primary');
 				add_button.classList.add('btn-danger');
 				add_button.disabled = true;
 				add_button.innerHTML = artist.Status;
 				add_button.dataset.loading = '';
 			} else {
-				cardEl.classList.add('status-blue');
+				statusValue = 'info';
 				add_button.disabled = false;
 				add_button.classList.remove('btn-danger', 'btn-secondary');
 				if (!add_button.classList.contains('btn-primary')) {
@@ -980,6 +980,9 @@ socket.on('refresh_artist', (artist) => {
 				add_button.innerHTML =
 					add_button.dataset.defaultText || 'Add to Lidarr';
 				add_button.dataset.loading = '';
+			}
+			if (statusDot) {
+				statusDot.dataset.status = statusValue;
 			}
 			return;
 		}

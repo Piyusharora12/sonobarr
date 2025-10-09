@@ -89,6 +89,7 @@ body {
     position: relative;
     border-radius: 1rem;
     background-color: var(--bs-body-bg);
+    overflow: hidden;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -104,8 +105,7 @@ body {
 .artist-img-container {
     position: relative;
     overflow: hidden;
-    border-radius: 1rem 1rem 0 0;
-    aspect-ratio: 4 / 5;
+    aspect-ratio: 1 / 1;
     background: linear-gradient(140deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.1));
     display: flex;
     align-items: center;
@@ -116,6 +116,8 @@ body {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: block;
+    border-radius: inherit;
 }
 
 .artist-img-container.artist-placeholder {
@@ -136,47 +138,15 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
-.status-indicator {
+.artist-img-container .status-indicator {
     position: absolute;
-    top: .75rem;
-    right: .75rem;
-    width: 20px;
-    height: 20px;
-}
-
-.status-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    display: inline-block;
-    position: relative;
-}
-
-.status-dot > .visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    border: 0;
-}
-
-.status-dot[data-status="success"] {
-    background-color: var(--bs-success);
-    border-color: var(--bs-success);
-}
-
-.status-dot[data-status="danger"] {
-    background-color: var(--bs-danger);
-    border-color: var(--bs-danger);
-}
-
-.status-dot[data-status="muted"] {
-    background-color: var(--bs-secondary);
-    border-color: var(--bs-secondary);
+    top: .6rem;
+    right: .6rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 2;
 }
 
 .avatar-thumb {
@@ -249,35 +219,34 @@ body {
 }
 
 
-.led {
-    width: 12px;
-    height: 12px;
+.artist-card .led {
+    width: .75rem;
+    height: .75rem;
     border-radius: 50%;
-    border: 2px solid;
-    position: absolute;
-    top: 4px;
-    right: 4px;
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.12), 0 6px 18px rgba(15, 23, 42, 0.28);
+    background-color: rgba(148, 163, 184, 0.65);
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.status-green .led {
-    background-color: #28a745;
-    border-color: #28a745; 
-    background-color: var(--bs-success); 
-    border-color: var(--bs-success); 
+[data-bs-theme="dark"] .artist-card .led {
+    border-color: rgba(15, 23, 42, 0.85);
+    box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.5), 0 6px 18px rgba(15, 23, 42, 0.45);
 }
 
-.status-red .led {
-    background-color: #dc3545;
-    border-color: #dc3545; 
-    background-color: var(--bs-danger); 
-    border-color: var(--bs-danger); 
+.artist-card .led[data-status="info"] {
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
 }
 
-.status-blue .led {
-    background-color: #007bff; 
-    border-color: #007bff; 
-    background-color: var(--bs-primary); 
-    border-color: var(--bs-primary); 
+.artist-card .led[data-status="success"] {
+    background-color: var(--bs-success);
+    border-color: var(--bs-success);
+}
+
+.artist-card .led[data-status="danger"] {
+    background-color: var(--bs-danger);
+    border-color: var(--bs-danger);
 }
 
 .bio-modal-body {
