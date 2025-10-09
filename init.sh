@@ -51,12 +51,12 @@ chown -R ${PUID}:${PGID} "${APP_DIR}"
 
 if [ -d "${MIGRATIONS_DIR}" ] && [ -f "${MIGRATIONS_DIR}/env.py" ]; then
    echo "Applying database migrations..."
-   su-exec ${PUID}:${PGID} flask db upgrade --directory "${MIGRATIONS_DIR}"
+   SONOBARR_SKIP_PROFILE_BACKFILL=1 su-exec ${PUID}:${PGID} flask db upgrade --directory "${MIGRATIONS_DIR}"
 elif [ ! -d "${MIGRATIONS_DIR}" ]; then
    echo "Initializing migrations directory at ${MIGRATIONS_DIR}..."
    su-exec ${PUID}:${PGID} flask db init --directory "${MIGRATIONS_DIR}"
    echo "Applying database migrations..."
-   su-exec ${PUID}:${PGID} flask db upgrade --directory "${MIGRATIONS_DIR}"
+   SONOBARR_SKIP_PROFILE_BACKFILL=1 su-exec ${PUID}:${PGID} flask db upgrade --directory "${MIGRATIONS_DIR}"
 else
    echo "Migrations directory present but missing env.py, skipping automatic upgrade."
 fi

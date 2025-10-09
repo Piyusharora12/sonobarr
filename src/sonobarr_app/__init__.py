@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Dict, Optional
 
 from flask import Flask, current_app
@@ -159,6 +160,10 @@ __all__ = ["create_app", "socketio"]
 
 def _ensure_user_profile_columns(logger: logging.Logger) -> None:
     """Backfill the user listening columns if migrations have not run yet."""
+
+    if os.environ.get("SONOBARR_SKIP_PROFILE_BACKFILL") == "1":
+        logger.debug("Profile column backfill skipped via environment flag.")
+        return
 
     try:
         inspector = inspect(db.engine)
