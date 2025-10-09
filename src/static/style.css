@@ -1,6 +1,74 @@
+html,
+body {
+    height: 100%;
+}
+
 body {
     margin: 0;
     padding: 0;
+}
+
+.top-bar-wrapper {
+    backdrop-filter: blur(12px);
+}
+
+.top-bar {
+    min-height: 4.25rem;
+    padding-inline: 1rem;
+}
+
+.topbar-leading,
+.topbar-actions {
+    min-width: 3rem;
+}
+
+.btn-icon {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    line-height: 1;
+}
+
+.header-title-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .5rem;
+}
+
+.header-title-stack .top-bar-app-title {
+    font-size: clamp(1.35rem, 3vw, 2rem);
+    font-weight: 600;
+}
+
+.header-stream-controls {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+}
+
+.header-stream-controls .spinner-border {
+    width: 1.5rem;
+    height: 1.5rem;
+}
+
+@media (min-width: 768px) {
+    .header-title-stack {
+        flex-direction: row;
+        justify-content: center;
+    }
+
+    .header-stream-controls {
+        margin-left: 1rem;
+    }
+}
+
+.dropdown-theme-toggle {
+    letter-spacing: .08em;
 }
 
 .app-footer {
@@ -52,6 +120,49 @@ body {
 .logo {
     width: 60px;
     margin-right: 0px;
+}
+
+.discovery-sidebar .sidebar-section {
+    background-color: rgba(var(--bs-body-color-rgb, 33, 37, 41), .05);
+    border: 1px solid rgba(var(--bs-body-color-rgb, 33, 37, 41), .08);
+    border-radius: 1rem;
+    padding: 1.25rem;
+}
+
+[data-bs-theme="dark"] .discovery-sidebar .sidebar-section {
+    background-color: rgba(255, 255, 255, .04);
+    border-color: rgba(255, 255, 255, .08);
+}
+
+.discovery-sidebar .sidebar-section-title {
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    margin-bottom: .75rem;
+}
+
+.discovery-sidebar .sidebar-section-subtitle {
+    line-height: 1.4;
+}
+
+.discovery-sidebar .sidebar-status {
+    min-height: 1.5rem;
+}
+
+.discovery-sidebar .sidebar-queue {
+    min-height: 12rem;
+}
+
+.discovery-sidebar #lidarr-item-list {
+    border-radius: .75rem;
+    border: 1px dashed rgba(var(--bs-body-color-rgb, 33, 37, 41), .15);
+    background-color: rgba(var(--bs-body-bg-rgb, 248, 249, 250), .6);
+}
+
+[data-bs-theme="dark"] .discovery-sidebar #lidarr-item-list {
+    border-color: rgba(255, 255, 255, .12);
+    background-color: rgba(255, 255, 255, .04);
 }
 
 .scrollable-content {

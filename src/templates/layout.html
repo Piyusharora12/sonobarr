@@ -40,23 +40,20 @@
   <div class="app-shell d-flex flex-column min-vh-100">
     {% block header %}
     <div class="sticky-top">
-      <div class="container-fluid bg-dark">
-        <div class="top-bar d-flex justify-content-between align-items-center">
-          <div class="d-flex align-items-center gap-2">
+      <header class="top-bar-wrapper bg-dark border-bottom border-dark-subtle">
+        <div class="container-fluid top-bar d-flex align-items-center justify-content-between gap-3">
+          <div class="topbar-leading d-flex align-items-center gap-2">
             {% block topbar_leading %}{% endblock %}
           </div>
-          <h1 class="title text-center text-light flex-grow-1 mb-0" id="return-to-top">
-            {% block topbar_title %}Sonobarr{% endblock %}
-          </h1>
-          <div class="d-flex align-items-center gap-2">
-            {% block topbar_actions %}{% endblock %}
-            <div class="d-flex align-items-center text-light gap-1" id="theme-toggle-wrapper">
-              <i class="fa fa-sun" aria-hidden="true"></i>
-              <div class="form-check form-switch mb-0">
-                <input class="form-check-input rounded" type="checkbox" id="theme-switch" aria-label="Toggle theme">
-              </div>
-              <i class="fa fa-moon" aria-hidden="true"></i>
+          <div class="flex-grow-1">
+            {% block topbar_title %}
+            <div class="header-title-stack text-center">
+              <h1 class="top-bar-app-title text-light mb-0" id="return-to-top">Sonobarr</h1>
             </div>
+            {% endblock %}
+          </div>
+          <div class="topbar-actions d-flex align-items-center gap-2">
+            {% block topbar_actions %}{% endblock %}
             {% if current_user.is_authenticated %}
             <div class="dropdown">
               <button class="btn btn-link text-light dropdown-toggle d-flex align-items-center text-decoration-none" type="button"
@@ -68,22 +65,48 @@
                 {% endif %}
                 <span class="d-none d-md-inline fw-semibold">{{ current_user.display_name or current_user.username }}</span>
               </button>
-              <ul class="dropdown-menu dropdown-menu-end">
+              <ul class="dropdown-menu dropdown-menu-end shadow-sm">
                 <li class="dropdown-header text-truncate">{{ current_user.display_name or current_user.username }}</li>
                 <li><a class="dropdown-item" href="{{ url_for('main.profile') }}">Profile</a></li>
                 {% if current_user.is_admin %}
+                <li>
+                  <button type="button" class="dropdown-item d-flex align-items-center gap-2" id="settings-button" data-bs-toggle="modal" data-bs-target="#config-modal">
+                    <i class="fa fa-gear"></i>
+                    <span>Configuration</span>
+                  </button>
+                </li>
                 <li><a class="dropdown-item" href="{{ url_for('admin.users') }}">User management</a></li>
                 {% endif %}
+                <li><hr class="dropdown-divider"></li>
+                <li class="px-3 py-2">
+                  <div class="dropdown-theme-toggle d-flex align-items-center justify-content-between gap-3">
+                    <span class="small text-secondary fw-semibold text-uppercase">Theme</span>
+                    <div class="d-flex align-items-center gap-2">
+                      <i class="fa fa-sun text-warning"></i>
+                      <div class="form-check form-switch mb-0">
+                        <input class="form-check-input rounded" type="checkbox" id="theme-switch" aria-label="Toggle theme">
+                      </div>
+                      <i class="fa fa-moon text-info"></i>
+                    </div>
+                  </div>
+                </li>
                 <li><hr class="dropdown-divider"></li>
                 <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">Sign out</a></li>
               </ul>
             </div>
             {% else %}
+            <div class="topbar-theme-quick d-flex align-items-center gap-2 text-light">
+              <i class="fa fa-sun small"></i>
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input rounded" type="checkbox" id="theme-switch" aria-label="Toggle theme">
+              </div>
+              <i class="fa fa-moon small"></i>
+            </div>
             <a class="btn btn-outline-light btn-sm" href="{{ url_for('auth.login') }}">Sign in</a>
             {% endif %}
           </div>
         </div>
-      </div>
+      </header>
     </div>
     {% endblock %}
     <main class="flex-grow-1 {% block main_wrapper_classes %}{% endblock %}">
