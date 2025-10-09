@@ -11,7 +11,7 @@ import time
 import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import musicbrainzngs
 import pylast
@@ -34,6 +34,7 @@ class SessionState:
     similar_artist_candidates: List[dict] = field(default_factory=list)
     similar_artist_batch_pointer: int = 0
     initial_batch_sent: bool = False
+    ai_seed_artists: List[str] = field(default_factory=list)
     stop_event: threading.Event = field(default_factory=threading.Event)
     search_lock: threading.Lock = field(default_factory=threading.Lock)
     running: bool = False
@@ -47,6 +48,7 @@ class SessionState:
         self.similar_artist_candidates.clear()
         self.similar_artist_batch_pointer = 0
         self.initial_batch_sent = False
+        self.ai_seed_artists.clear()
         self.stop_event.clear()
         self.running = True
 
@@ -302,6 +304,7 @@ class DataHandler:
         if not session.cleaned_lidarr_items:
             session.cleaned_lidarr_items = self._copy_cached_cleaned_names()
         session.artists_to_use_in_search = seeds
+        session.ai_seed_artists = list(seeds)
 
         self.socketio.emit("ai_prompt_ack", {"seeds": seeds}, room=sid)
         self.socketio.emit("clear", room=sid)
@@ -312,9 +315,57 @@ class DataHandler:
         }
         self.socketio.emit("lidarr_sidebar_update", payload, room=sid)
 
+        seed_cards, missing_names = self._build_artist_payloads_from_names(seeds)
+        if not seed_cards:
+            self.logger.error("Failed to build artist cards for AI seeds: %s", seeds)
+            self.socketio.emit(
+                "ai_prompt_error",
+                {
+                    "message": "We couldn't load those artists from our data sources. Try refining your request.",
+                },
+                room=sid,
+            )
+            session.running = False
+            self.socketio.emit(
+                "lidarr_sidebar_update",
+                {
+                    "Status": "Success",
+                    "Data": session.lidarr_items,
+                    "Running": session.running,
+                },
+                room=sid,
+            )
+            return
+
+        session.recommended_artists.extend(seed_cards)
+        self.socketio.emit("more_artists_loaded", seed_cards, room=sid)
+
+        if missing_names:
+            self.logger.warning("AI suggested artists not found in Last.fm lookup: %s", ", ".join(missing_names))
+            self.socketio.emit(
+                "new_toast_msg",
+                {
+                    "title": "Missing artist data",
+                    "message": "Some AI picks couldn't be loaded from Last.fm.",
+                },
+                room=sid,
+            )
+
         self.prepare_similar_artist_candidates(session)
-        with session.search_lock:
-            self.load_similar_artist_batch(session, sid)
+        has_more = bool(session.similar_artist_candidates)
+        session.initial_batch_sent = True
+        session.running = False
+        self.socketio.emit("initial_load_complete", {"hasMore": has_more}, room=sid)
+
+        self.socketio.emit(
+            "lidarr_sidebar_update",
+            {
+                "Status": "Success",
+                "Data": session.lidarr_items,
+                "Running": session.running,
+            },
+            room=sid,
+        )
 
     def stop(self, sid: str) -> None:
         session = self.ensure_session(sid)
@@ -337,13 +388,18 @@ class DataHandler:
         )
 
         seen_candidates = set()
+        seed_names = {unidecode(name).lower() for name in session.ai_seed_artists}
         for artist_name in session.artists_to_use_in_search:
             try:
                 chosen_artist = lfm.get_artist(artist_name)
                 related_artists = chosen_artist.get_similar()
                 for related_artist in related_artists:
                     cleaned_artist = unidecode(related_artist.item.name).lower()
-                    if cleaned_artist in session.cleaned_lidarr_items or cleaned_artist in seen_candidates:
+                    if (
+                        cleaned_artist in session.cleaned_lidarr_items
+                        or cleaned_artist in seen_candidates
+                        or cleaned_artist in seed_names
+                    ):
                         continue
                     seen_candidates.add(cleaned_artist)
                     raw_match = getattr(related_artist, "match", None)
@@ -388,64 +444,34 @@ class DataHandler:
             api_secret=self.last_fm_api_secret,
         )
 
+        existing_names = {unidecode(item["Name"]).lower() for item in session.recommended_artists}
+
         for candidate in batch:
             if session.stop_event.is_set():
                 break
             related_artist = candidate["artist"]
             similarity_score = candidate.get("match")
+            artist_name = related_artist.item.name
+            normalized = unidecode(artist_name).lower()
+            if normalized in existing_names:
+                continue
             try:
-                artist_obj = lfm_network.get_artist(related_artist.item.name)
-                genres = ", ".join(
-                    [tag.item.get_name().title() for tag in artist_obj.get_top_tags()[:5]]
-                ) or "Unknown Genre"
-                try:
-                    listeners = artist_obj.get_listener_count() or 0
-                except Exception:
-                    listeners = 0
-                try:
-                    play_count = artist_obj.get_playcount() or 0
-                except Exception:
-                    play_count = 0
-
-                img_link = None
-                try:
-                    endpoint = "https://api.deezer.com/search/artist"
-                    params = {"q": related_artist.item.name}
-                    response = requests.get(endpoint, params=params, timeout=10)
-                    data = response.json()
-                    if data.get("data"):
-                        artist_info = data["data"][0]
-                        img_link = (
-                            artist_info.get("picture_xl")
-                            or artist_info.get("picture_large")
-                            or artist_info.get("picture_medium")
-                            or artist_info.get("picture")
-                        )
-                except Exception:
-                    img_link = None
-
-                if similarity_score is not None:
-                    clamped_similarity = max(0.0, min(1.0, similarity_score))
-                    similarity_label = f"Similarity: {clamped_similarity * 100:.1f}%"
-                else:
-                    clamped_similarity = None
-                    similarity_label = None
-
-                artist_payload = {
-                    "Name": related_artist.item.name,
-                    "Genre": genres,
-                    "Status": "",
-                    "Img_Link": img_link or "https://placehold.co/512x512?text=No+Image",
-                    "Popularity": f"Play Count: {self.format_numbers(play_count)}",
-                    "Followers": f"Listeners: {self.format_numbers(listeners)}",
-                    "SimilarityScore": clamped_similarity,
-                    "Similarity": similarity_label,
-                }
-
-                session.recommended_artists.append(artist_payload)
-                self.socketio.emit("more_artists_loaded", [artist_payload], room=sid)
+                artist_payload = self._fetch_artist_payload(
+                    lfm_network,
+                    artist_name,
+                    similarity_score=similarity_score,
+                )
             except Exception as exc:  # pragma: no cover - network errors
-                self.logger.error(f"Error loading artist {related_artist.item.name}: {exc}")
+                self.logger.error("Error building payload for %s: %s", artist_name, exc)
+                continue
+
+            if not artist_payload:
+                self.logger.error("Artist payload missing for %s", artist_name)
+                continue
+
+            session.recommended_artists.append(artist_payload)
+            existing_names.add(normalized)
+            self.socketio.emit("more_artists_loaded", [artist_payload], room=sid)
 
         session.similar_artist_batch_pointer += len(batch)
         has_more = session.similar_artist_batch_pointer < len(session.similar_artist_candidates)
@@ -769,6 +795,107 @@ class DataHandler:
         self.socketio.emit("prehear_result", result, room=sid)
 
     # Utilities -------------------------------------------------------
+    def _fetch_artist_payload(
+        self,
+        lfm_network: pylast.LastFMNetwork,
+        artist_name: str,
+        *,
+        similarity_score: Optional[float] = None,
+    ) -> Optional[dict]:
+        try:
+            artist_obj = lfm_network.get_artist(artist_name)
+        except Exception as exc:  # pragma: no cover - network errors
+            self.logger.error("Failed to load artist '%s' from Last.fm: %s", artist_name, exc)
+            return None
+
+        try:
+            tags = [tag.item.get_name().title() for tag in artist_obj.get_top_tags()[:5]]
+        except Exception:
+            tags = []
+        genres = ", ".join(tags) or "Unknown Genre"
+
+        try:
+            listeners = artist_obj.get_listener_count() or 0
+        except Exception:
+            listeners = 0
+
+        try:
+            play_count = artist_obj.get_playcount() or 0
+        except Exception:
+            play_count = 0
+
+        img_link = None
+        try:
+            endpoint = "https://api.deezer.com/search/artist"
+            params = {"q": artist_name}
+            response = requests.get(endpoint, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            if data.get("data"):
+                artist_info = data["data"][0]
+                img_link = (
+                    artist_info.get("picture_xl")
+                    or artist_info.get("picture_large")
+                    or artist_info.get("picture_medium")
+                    or artist_info.get("picture")
+                )
+        except Exception:
+            img_link = None
+
+        similarity_label = None
+        clamped_similarity = None
+        if similarity_score is not None:
+            clamped_similarity = max(0.0, min(1.0, similarity_score))
+            similarity_label = f"Similarity: {clamped_similarity * 100:.1f}%"
+
+        display_name = artist_name
+        try:
+            if hasattr(artist_obj, "get_name"):
+                display_name = artist_obj.get_name() or artist_name
+            elif hasattr(artist_obj, "name"):
+                display_name = artist_obj.name or artist_name
+        except Exception:
+            display_name = artist_name
+
+        return {
+            "Name": display_name,
+            "Genre": genres,
+            "Status": "",
+            "Img_Link": img_link or "https://placehold.co/512x512?text=No+Image",
+            "Popularity": f"Play Count: {self.format_numbers(play_count)}",
+            "Followers": f"Listeners: {self.format_numbers(listeners)}",
+            "SimilarityScore": clamped_similarity,
+            "Similarity": similarity_label,
+        }
+
+    def _build_artist_payloads_from_names(self, names: Sequence[str]) -> Tuple[List[dict], List[str]]:
+        if not names:
+            return [], []
+
+        lfm_network = pylast.LastFMNetwork(
+            api_key=self.last_fm_api_key,
+            api_secret=self.last_fm_api_secret,
+        )
+
+        payloads: List[dict] = []
+        missing: List[str] = []
+        seen: set[str] = set()
+
+        for raw_name in names:
+            if not raw_name:
+                continue
+            normalized = unidecode(raw_name).lower()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            payload = self._fetch_artist_payload(lfm_network, raw_name)
+            if payload:
+                payloads.append(payload)
+            else:
+                missing.append(raw_name)
+
+        return payloads, missing
+
     def _configure_openai_client(self) -> None:
         api_key = (self.openai_api_key or "").strip()
         if not api_key:

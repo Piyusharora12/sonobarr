@@ -1,5 +1,6 @@
 import json
-from typing import List, Sequence
+import re
+from typing import List, Optional, Sequence
 
 from openai import OpenAI
 from openai import OpenAIError
@@ -30,6 +31,36 @@ class OpenAIRecommender:
         self.model = model or DEFAULT_OPENAI_MODEL
         self.max_seed_artists = max_seed_artists
 
+    def _extract_array_fragment(self, content: str) -> Optional[str]:
+        if not content:
+            return None
+
+        # Prefer fenced code blocks labelled json (e.g. ```json ... ```)
+        for match in re.finditer(r"```(?:json)?\s*(.*?)```", content, flags=re.IGNORECASE | re.DOTALL):
+            candidate = match.group(1).strip()
+            if candidate.startswith("["):
+                return candidate
+
+        content_stripped = content.strip()
+        if content_stripped.startswith("["):
+            return content_stripped
+
+        decoder = json.JSONDecoder()
+        text_length = len(content)
+        idx = 0
+        while idx < text_length:
+            char = content[idx]
+            if char == "[":
+                try:
+                    parsed, end = decoder.raw_decode(content[idx:])
+                except json.JSONDecodeError:
+                    idx += 1
+                    continue
+                if isinstance(parsed, list):
+                    return content[idx : idx + end]
+            idx += 1
+        return None
+
     def generate_seed_artists(
         self,
         prompt: str,
@@ -52,7 +83,6 @@ class OpenAIRecommender:
                     {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.7,
-                max_tokens=300,
             )
         except OpenAIError as exc:  # pragma: no cover - network failure path
             raise RuntimeError(str(exc)) from exc
@@ -66,8 +96,15 @@ class OpenAIRecommender:
             return []
 
         content = content.strip()
+        array_fragment = self._extract_array_fragment(content)
+        if not array_fragment:
+            raise RuntimeError(
+                "OpenAI response did not include a JSON array of artist names. "
+                "Please try rephrasing your request."
+            )
+
         try:
-            raw_data = json.loads(content)
+            raw_data = json.loads(array_fragment)
         except json.JSONDecodeError as exc:
             raise RuntimeError(
                 "OpenAI response was not valid JSON. "
@@ -75,7 +112,14 @@ class OpenAIRecommender:
             ) from exc
 
         if not isinstance(raw_data, list):
-            raise RuntimeError("OpenAI response JSON was not a list of artists.")
+            if isinstance(raw_data, dict):
+                candidate_list = raw_data.get("artists") or raw_data.get("seeds")
+                if isinstance(candidate_list, list):
+                    raw_data = candidate_list
+                else:
+                    raise RuntimeError("OpenAI response JSON was not a list of artists.")
+            else:
+                raise RuntimeError("OpenAI response JSON was not a list of artists.")
 
         seeds: List[str] = []
         for item in raw_data:
