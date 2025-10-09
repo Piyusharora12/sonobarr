@@ -136,6 +136,46 @@ function escape_html(text) {
 	return div.innerHTML;
 }
 
+function render_biography_html(biography) {
+	if (typeof biography !== 'string') {
+		return '';
+	}
+	var trimmed = biography.trim();
+	if (!trimmed) {
+		return '';
+	}
+	var containsHtml = /<\/?[a-z][\s\S]*>/i.test(trimmed);
+	if (containsHtml) {
+		if (typeof DOMPurify !== 'undefined') {
+			return DOMPurify.sanitize(trimmed, {
+				USE_PROFILES: { html: true },
+			});
+		}
+		return escape_html(trimmed);
+	}
+	var paragraphs = trimmed
+		.split(/\n{2,}/)
+		.map(function (block) {
+			return block.trim();
+		})
+		.filter(function (block) {
+			return block.length > 0;
+		})
+		.map(function (block) {
+			return '<p>' + escape_html(block).replace(/\n/g, '<br>') + '</p>';
+		})
+		.join('');
+	if (!paragraphs) {
+		return escape_html(trimmed);
+	}
+	if (typeof DOMPurify !== 'undefined') {
+		return DOMPurify.sanitize(paragraphs, {
+			USE_PROFILES: { html: true },
+		});
+	}
+	return paragraphs;
+}
+
 function render_loading_spinner(message) {
 	return `
         <div class="d-flex justify-content-center align-items-center py-4">
@@ -370,6 +410,11 @@ function append_artists(artists) {
 	artists.forEach(function (artist) {
 		var clone = document.importNode(template.content, true);
 		var artist_col = clone.querySelector('#artist-column');
+		var cardEl = artist_col.querySelector('.artist-card');
+		var imageContainer = artist_col.querySelector('.artist-img-container');
+		var coverImage = imageContainer
+			? imageContainer.querySelector('.card-img-top')
+			: null;
 
 		artist_col.querySelector('.card-title').textContent = artist.Name;
 		var similarityEl = artist_col.querySelector('.similarity');
@@ -397,13 +442,32 @@ function append_artists(artists) {
 			}
 		}
 		artist_col.querySelector('.genre').textContent = artist.Genre;
-		if (artist.Img_Link) {
-			artist_col.querySelector('.card-img-top').src = artist.Img_Link;
-			artist_col.querySelector('.card-img-top').alt = artist.Name;
-		} else {
-			artist_col
-				.querySelector('.artist-img-container')
-				.removeChild(artist_col.querySelector('.card-img-top'));
+		if (imageContainer) {
+			imageContainer.classList.remove('artist-placeholder');
+			var existingPlaceholder = imageContainer.querySelector(
+				'.artist-placeholder-letter'
+			);
+			if (existingPlaceholder) {
+				existingPlaceholder.remove();
+			}
+		}
+		if (artist.Img_Link && coverImage) {
+			coverImage.src = artist.Img_Link;
+			coverImage.alt = artist.Name;
+			coverImage.classList.remove('d-none');
+		} else if (imageContainer) {
+			if (coverImage) {
+				coverImage.remove();
+			}
+			imageContainer.classList.add('artist-placeholder');
+			var placeholderSpan = document.createElement('span');
+			placeholderSpan.className = 'artist-placeholder-letter';
+			var firstLetter =
+				typeof artist.Name === 'string' && artist.Name.length > 0
+					? artist.Name.charAt(0).toUpperCase()
+					: '?';
+			placeholderSpan.textContent = firstLetter;
+			imageContainer.appendChild(placeholderSpan);
 		}
 		var add_button = artist_col.querySelector('.add-to-lidarr-btn');
 		add_button.dataset.defaultText =
@@ -425,13 +489,13 @@ function append_artists(artists) {
 		artist_col.querySelector('.followers').textContent = artist.Followers;
 		artist_col.querySelector('.popularity').textContent = artist.Popularity;
 
+		cardEl.classList.remove('status-green', 'status-red', 'status-blue');
+
 		if (
 			artist.Status === 'Added' ||
 			artist.Status === 'Already in Lidarr'
 		) {
-			artist_col
-				.querySelector('.card-body')
-				.classList.add('status-green');
+			cardEl.classList.add('status-green');
 			add_button.classList.remove('btn-primary');
 			add_button.classList.add('btn-secondary');
 			add_button.disabled = true;
@@ -440,13 +504,13 @@ function append_artists(artists) {
 			artist.Status === 'Failed to Add' ||
 			artist.Status === 'Invalid Path'
 		) {
-			artist_col.querySelector('.card-body').classList.add('status-red');
+			cardEl.classList.add('status-red');
 			add_button.classList.remove('btn-primary');
 			add_button.classList.add('btn-danger');
 			add_button.disabled = true;
 			add_button.textContent = artist.Status;
 		} else {
-			artist_col.querySelector('.card-body').classList.add('status-blue');
+			cardEl.classList.add('status-blue');
 		}
 		artist_row.appendChild(clone);
 	});
@@ -846,25 +910,27 @@ socket.on('lidarr_sidebar_update', (response) => {
 socket.on('refresh_artist', (artist) => {
 	var artist_cards = document.querySelectorAll('#artist-column');
 	artist_cards.forEach(function (card) {
-		var card_body = card.querySelector('.card-body');
-		var card_artist_name = card_body
-			.querySelector('.card-title')
-			.textContent.trim();
+		var cardEl = card.querySelector('.artist-card');
+		if (!cardEl) {
+			return;
+		}
+		var titleEl = cardEl.querySelector('.card-title');
+		var card_artist_name = titleEl ? titleEl.textContent.trim() : '';
 
 		if (card_artist_name === artist.Name) {
-			card_body.classList.remove(
+			cardEl.classList.remove(
 				'status-green',
 				'status-red',
 				'status-blue'
 			);
 
-			var add_button = card_body.querySelector('.add-to-lidarr-btn');
+			var add_button = cardEl.querySelector('.add-to-lidarr-btn');
 
 			if (
 				artist.Status === 'Added' ||
 				artist.Status === 'Already in Lidarr'
 			) {
-				card_body.classList.add('status-green');
+				cardEl.classList.add('status-green');
 				add_button.classList.remove('btn-primary');
 				add_button.classList.add('btn-secondary');
 				add_button.disabled = true;
@@ -874,14 +940,14 @@ socket.on('refresh_artist', (artist) => {
 				artist.Status === 'Failed to Add' ||
 				artist.Status === 'Invalid Path'
 			) {
-				card_body.classList.add('status-red');
+				cardEl.classList.add('status-red');
 				add_button.classList.remove('btn-primary');
 				add_button.classList.add('btn-danger');
 				add_button.disabled = true;
 				add_button.innerHTML = artist.Status;
 				add_button.dataset.loading = '';
 			} else {
-				card_body.classList.add('status-blue');
+				cardEl.classList.add('status-blue');
 				add_button.disabled = false;
 				add_button.classList.remove('btn-danger', 'btn-secondary');
 				if (!add_button.classList.contains('btn-primary')) {
@@ -1024,7 +1090,13 @@ socket.on('lastfm_preview', function (preview_info) {
 		modal_title.textContent = artist_name;
 	}
 	if (modal_body) {
-		modal_body.innerHTML = DOMPurify.sanitize(biography);
+		var biographyHtml = render_biography_html(biography);
+		if (biographyHtml) {
+			modal_body.innerHTML = biographyHtml;
+		} else {
+			modal_body.innerHTML =
+				'<div class="alert alert-info mb-0">No formatted biography was returned for this artist.</div>';
+		}
 	}
 	if (modalEl && !modalEl.classList.contains('show')) {
 		show_modal_with_lock('bio-modal-modal');

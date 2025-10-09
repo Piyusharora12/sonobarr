@@ -216,34 +216,32 @@
     <div class="row g-4 row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xxl-5" id="artist-row">
       <template id="artist-template">
         <div class="col" id="artist-column">
-          <div class="card h-100">
-            <div class="card-body d-flex flex-column">
-              <div class="status-indicator">
-                <div class="led"></div>
+          <article class="card artist-card h-100 shadow-sm">
+            <div class="status-indicator">
+              <div class="led"></div>
+            </div>
+            <div class="artist-img-container mb-3">
+              <img src="" class="card-img-top" alt="">
+            </div>
+            <div class="card-body d-flex flex-column gap-3">
+              <div>
+                <h5 class="card-title mb-1"></h5>
+                <p class="card-text similarity artist-similarity text-uppercase small fw-semibold d-none"></p>
+                <p class="card-text genre text-secondary mb-0"></p>
               </div>
-              <h5 class="card-title"></h5>
-              <p class="card-text similarity d-none"></p>
-              <p class="card-text genre"></p>
-              <div class="artist-img-container">
-                <img src="" class="card-img-top" alt="">
-                <div class="artist-img-overlay"></div>
-                <div class="button-container">
-                  <button class="btn btn-primary add-to-lidarr-btn">Add to Lidarr</button>
-                  <button class="btn btn-success get-preview-btn">Bio</button>
-                  <!-- Listen to Sample button -->
-                  <button class="btn btn-info listen-sample-btn">Listen to Sample</button>
+              <div class="artist-actions d-grid gap-2">
+                <button class="btn btn-primary add-to-lidarr-btn w-100">Add to Lidarr</button>
+                <div class="artist-secondary-actions d-flex gap-2">
+                  <button class="btn btn-outline-primary get-preview-btn flex-fill">Bio</button>
+                  <button class="btn btn-outline-secondary listen-sample-btn flex-fill">Listen</button>
                 </div>
               </div>
-              <div class="row mt-auto pt-2">
-                <div class="col">
-                  <p class="card-text followers"></p>
-                </div>
-                <div class="col">
-                  <p class="card-text text-end popularity"></p>
-                </div>
+              <div class="artist-meta text-muted small d-flex justify-content-between">
+                <span class="followers"></span>
+                <span class="popularity text-end"></span>
               </div>
             </div>
-          </div>
+          </article>
         </div>
       </template>
     </div>
@@ -304,7 +302,7 @@
           <h5 class="modal-title" id="bio-modal-title">Modal title</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <div class="modal-body" id="modal-body">
+  <div class="modal-body bio-modal-body" id="modal-body">
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
