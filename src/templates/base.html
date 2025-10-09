@@ -9,24 +9,25 @@
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 {% endblock %}
 {% block topbar_leading %}
-<button class="btn btn-link text-light" type="button" data-bs-toggle="offcanvas"
-        data-bs-target="#lidarr-sidebar" aria-controls="lidarr-sidebar">
-  <i class="fa fa-bars fa-2x"></i>
+<button class="btn btn-outline-light btn-icon" type="button" data-bs-toggle="offcanvas"
+        data-bs-target="#lidarr-sidebar" aria-controls="lidarr-sidebar" title="Discovery controls">
+  <i class="fa fa-magnifying-glass fa-lg"></i>
 </button>
 {% endblock %}
-{% block topbar_actions %}
-<button class="btn btn-outline-light btn-sm d-none" id="load-more-btn" type="button">
-  Load More
-</button>
-<div class="spinner-border spinner-border-sm text-light d-none" id="artists-loading-spinner" role="status">
-  <span class="visually-hidden">Loading...</span>
+{% block topbar_title %}
+<div class="header-title-stack text-center text-light">
+  <h1 class="top-bar-app-title mb-0" id="return-to-top">Sonobarr</h1>
+  <div class="header-stream-controls justify-content-center">
+    <button class="btn btn-outline-light btn-sm d-none" id="load-more-btn" type="button">
+      Load More
+    </button>
+    <div class="spinner-border spinner-border-sm text-light d-none" id="artists-loading-spinner" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+  </div>
 </div>
-{% if current_user.is_authenticated and current_user.is_admin %}
-<button class="btn btn-link text-light" id="settings-button" data-bs-toggle="modal" data-bs-target="#config-modal">
-  <i class="fa fa-gear fa-2x"></i>
-</button>
-{% endif %}
 {% endblock %}
+{% block topbar_actions %}{% endblock %}
 {% block main %}
   {% if current_user.is_admin %}
   <!-- Settings Modal -->
@@ -40,86 +41,173 @@
 
         </div>
         <div class="modal-body">
-          <div id="save-message" style="display: none;" class="alert alert-success mt-3">
+          <div id="save-message" class="alert alert-success d-none" role="alert">
             Settings saved successfully.
           </div>
-          <div class="form-group-modal">
-            <label for="lidarr-address">Lidarr Address:</label>
-            <input type="text" class="form-control" id="lidarr-address" placeholder="Enter Lidarr Address">
-          </div>
-          <div class="form-group-modal my-3">
-            <label for="lidarr-api-key">Lidarr API Key:</label>
-            <input type="text" class="form-control" id="lidarr-api-key" placeholder="Enter Lidarr API Key">
-          </div>
-          <div class="form-group-modal my-3">
-            <label for="root-folder-path">Lidarr Root Folder Path:</label>
-            <input type="text" class="form-control" id="root-folder-path" placeholder="Enter Lidarr Root Folder Path">
-          </div>
-	  <div class="form-group-modal my-3">
-            <label for="youtube-api-key">YouTube API Key:</label>
-            <input type="text" class="form-control" id="youtube-api-key" placeholder="Enter YouTUbe API Key">
-          </div>
+          <form id="settings-form" class="settings-form">
+            <h6 class="text-muted mt-2">Lidarr connection</h6>
+            <div class="form-group-modal">
+              <label for="lidarr-address">Lidarr Address</label>
+              <input type="text" class="form-control" id="lidarr-address" placeholder="http://192.168.1.1:8686">
+            </div>
+            <div class="form-group-modal my-3">
+              <label for="lidarr-api-key">Lidarr API Key</label>
+              <input type="text" class="form-control" id="lidarr-api-key" placeholder="Enter Lidarr API Key">
+            </div>
+            <div class="form-group-modal my-3">
+              <label for="root-folder-path">Root Folder Path</label>
+              <input type="text" class="form-control" id="root-folder-path" placeholder="/data/media/music/">
+            </div>
+            <div class="row g-3">
+              <div class="col">
+                <div class="form-group-modal">
+                  <label for="quality-profile-id">Quality Profile ID</label>
+                  <input type="number" class="form-control" id="quality-profile-id" min="1">
+                </div>
+              </div>
+              <div class="col">
+                <div class="form-group-modal">
+                  <label for="metadata-profile-id">Metadata Profile ID</label>
+                  <input type="number" class="form-control" id="metadata-profile-id" min="1">
+                </div>
+              </div>
+            </div>
+            <div class="form-group-modal my-3">
+              <label for="lidarr-api-timeout">Lidarr API Timeout (seconds)</label>
+              <input type="number" class="form-control" id="lidarr-api-timeout" min="1" step="1">
+              <small class="form-text text-muted">How long Sonobarr waits for Lidarr before giving up.</small>
+            </div>
+            <div class="form-check form-switch my-2">
+              <input class="form-check-input" type="checkbox" id="fallback-to-top-result">
+              <label class="form-check-label" for="fallback-to-top-result">Fallback to Lidarr's top search result when similarity is low</label>
+            </div>
+            <div class="form-check form-switch my-2">
+              <input class="form-check-input" type="checkbox" id="search-for-missing-albums">
+              <label class="form-check-label" for="search-for-missing-albums">Trigger Lidarr's "search for missing" flag on add</label>
+            </div>
+            <div class="form-check form-switch my-2">
+              <input class="form-check-input" type="checkbox" id="dry-run-adding-to-lidarr">
+              <label class="form-check-label" for="dry-run-adding-to-lidarr">Dry run additions (don't call Lidarr)</label>
+            </div>
+
+            <hr class="my-4">
+
+            <h6 class="text-muted">Discovery behaviour</h6>
+            <div class="row g-3">
+              <div class="col">
+                <div class="form-group-modal">
+                  <label for="similar-artist-batch-size">Batch Size</label>
+                  <input type="number" class="form-control" id="similar-artist-batch-size" min="1" step="1">
+                  <small class="form-text text-muted">Cards streamed per batch.</small>
+                </div>
+              </div>
+              <div class="col">
+                <div class="form-group-modal">
+                  <label for="auto-start-delay">Auto-start Delay (seconds)</label>
+                  <input type="number" class="form-control" id="auto-start-delay" min="0" step="1">
+                </div>
+              </div>
+            </div>
+            <div class="form-check form-switch my-2">
+              <input class="form-check-input" type="checkbox" id="auto-start">
+              <label class="form-check-label" for="auto-start">Auto-start discovery when the page loads</label>
+            </div>
+
+            <hr class="my-4">
+
+            <h6 class="text-muted">External APIs</h6>
+            <div class="form-group-modal">
+              <label for="last-fm-api-key">Last.fm API Key</label>
+              <input type="text" class="form-control" id="last-fm-api-key" placeholder="Enter Last.fm API Key">
+            </div>
+            <div class="form-group-modal my-3">
+              <label for="last-fm-api-secret">Last.fm API Secret</label>
+              <input type="text" class="form-control" id="last-fm-api-secret" placeholder="Enter Last.fm API Secret">
+            </div>
+            <div class="form-group-modal my-3">
+              <label for="youtube-api-key">YouTube API Key</label>
+              <input type="text" class="form-control" id="youtube-api-key" placeholder="Enter YouTube API Key">
+              <small class="form-text text-muted">YouTube powers the preview player. Leave blank to fall back to iTunes samples.</small>
+            </div>
+            <div class="form-group-modal my-3">
+              <label for="openai-api-key">OpenAI API Key</label>
+              <input type="text" class="form-control" id="openai-api-key" placeholder="sk-...">
+              <small class="form-text text-muted">Leave blank to disable the AI Assist modal.</small>
+            </div>
+            <div class="row g-3">
+              <div class="col">
+                <div class="form-group-modal">
+                  <label for="openai-model">OpenAI Model</label>
+                  <input type="text" class="form-control" id="openai-model" placeholder="e.g., gpt-4o-mini">
+                </div>
+              </div>
+              <div class="col">
+                <div class="form-group-modal">
+                  <label for="openai-max-seed-artists">Max Seed Artists</label>
+                  <input type="number" class="form-control" id="openai-max-seed-artists" min="1" step="1">
+                </div>
+              </div>
+            </div>
+          </form>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-          <button type="button" id="save-changes-button" class="btn btn-primary">Save changes</button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" id="save-changes-button" class="btn btn-primary" form="settings-form">Save changes</button>
         </div>
       </div>
     </div>
   </div>
   {% endif %}
 
-  <!-- SideBar Modal -->
-  <div class="offcanvas offcanvas-start" tabindex="-1" id="lidarr-sidebar" aria-labelledby="lidarr-sidebar">
-    <div class="offcanvas-header">
-      <div class="logo-and-title m-1">
-        <img src="{{url_for('static', filename='lidarr.svg')}}" alt="Logo" class="logo">
-        <div class="d-flex align-items-center">
-          <h2 class="panel-title ps-2 mb-0">Lidarr</h2>
-        </div>
+  <!-- Discovery Sidebar -->
+  <div class="offcanvas offcanvas-start discovery-sidebar" tabindex="-1" id="lidarr-sidebar" aria-labelledby="lidarr-sidebar-label">
+    <div class="offcanvas-header border-bottom">
+      <div class="d-flex flex-column">
+        <h2 class="offcanvas-title fs-5 mb-1" id="lidarr-sidebar-label">Discovery console</h2>
+        <p class="text-secondary mb-0 small">Stream AI ideas, keep Lidarr in sync, and manage your queue from one place.</p>
       </div>
       <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
+    <div class="offcanvas-body d-flex flex-column gap-4">
+      <section class="sidebar-section">
+        <p class="sidebar-section-title text-uppercase">Discovery tools</p>
+        <p class="sidebar-section-subtitle small text-secondary mb-3">Kick off an AI-assisted session or top up your queue without leaving the wall.</p>
+        <div class="d-grid gap-2">
+          <button class="btn btn-outline-primary w-100" id="ai-assist-button" type="button" data-bs-toggle="modal" data-bs-target="#ai-helper-modal">
+            <i class="fa fa-magic me-2"></i>
+            AI Assist
+          </button>
+        </div>
+      </section>
 
-    <div class="container">
-      <div class="control-box m-1 w-100">
-        <div class="row w-100">
-          <div class="col p-1">
-            <button class="btn btn-primary w-100" id="lidarr-get-artists-button" type="button">
-              <span class="spinner-border spinner-border-sm d-none" id="lidarr-spinner" role="status"
-                aria-hidden="true"></span>
-              Get Lidarr Artists
-            </button>
-          </div>
-          <div class="col p-1">
-            <button class="btn btn-success w-100 ms-2" id="start-stop-button">Start</button>
+      <section class="sidebar-section">
+        <p class="sidebar-section-title text-uppercase">Library sync</p>
+        <div class="d-grid gap-2">
+          <button class="btn btn-primary w-100" id="lidarr-get-artists-button" type="button">
+            <span class="spinner-border spinner-border-sm d-none" id="lidarr-spinner" role="status" aria-hidden="true"></span>
+            Get Lidarr Artists
+          </button>
+          <button class="btn btn-success w-100" id="start-stop-button" type="button">Start discovery</button>
+        </div>
+        <div class="sidebar-status small text-secondary-emphasis mt-3">
+          <span id="lidarr-status"></span>
+        </div>
+      </section>
+
+      <section class="sidebar-section">
+        <p class="sidebar-section-title text-uppercase">Selection</p>
+        <div id="lidarr-select-all-container" class="d-flex align-items-center justify-content-between gap-2 d-none">
+          <div class="form-check mb-0">
+            <input type="checkbox" class="form-check-input" id="lidarr-select-all">
+            <label class="form-check-label" for="lidarr-select-all">Select all</label>
           </div>
         </div>
+      </section>
 
-        <div class="row w-100">
-          <div class="col">
-            <div class="status-only">
-              <span id="lidarr-status"></span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="row w-100">
-        <div class="col">
-          <div class="p-2 pt-1 d-none" id="lidarr-select-all-container">
-            <div class="form-check">
-              <input type="checkbox" class="form-check-input" id="lidarr-select-all">
-              <label class="form-check-label" for="lidarr-select-all">Select All</label>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="offcanvas-body">
-      <div id="lidarr-item-list" class="scrollable-content p-1 bg-light-subtle">
-      </div>
+      <section class="sidebar-section sidebar-queue flex-grow-1 d-flex flex-column">
+        <p class="sidebar-section-title text-uppercase">Queued artists</p>
+        <div id="lidarr-item-list" class="scrollable-content flex-grow-1 p-2 bg-body-tertiary rounded-4"></div>
+      </section>
     </div>
   </div>
 
@@ -128,36 +216,66 @@
     <div class="row g-4 row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xxl-5" id="artist-row">
       <template id="artist-template">
         <div class="col" id="artist-column">
-          <div class="card h-100">
-            <div class="card-body d-flex flex-column">
-              <div class="status-indicator">
-                <div class="led"></div>
+          <article class="card artist-card h-100 shadow-sm">
+            <div class="artist-img-container mb-2">
+              <img src="" class="card-img-top" alt="">
+              <span class="status-indicator" aria-hidden="true">
+                <span class="led" data-status="info"></span>
+              </span>
+            </div>
+            <div class="card-body d-flex flex-column gap-2 p-3">
+              <div class="d-flex flex-column gap-1">
+                <h5 class="card-title mb-0 fs-5"></h5>
+                <p class="card-text similarity artist-similarity text-uppercase small fw-semibold text-primary d-none"></p>
+                <p class="card-text genre text-body-secondary mb-0 small"></p>
               </div>
-              <h5 class="card-title"></h5>
-              <p class="card-text similarity d-none"></p>
-              <p class="card-text genre"></p>
-              <div class="artist-img-container">
-                <img src="" class="card-img-top" alt="">
-                <div class="artist-img-overlay"></div>
-                <div class="button-container">
-                  <button class="btn btn-primary add-to-lidarr-btn">Add to Lidarr</button>
-                  <button class="btn btn-success get-preview-btn">Bio</button>
-                  <!-- Listen to Sample button -->
-                  <button class="btn btn-info listen-sample-btn">Listen to Sample</button>
+              <div class="artist-actions d-flex flex-column gap-2 mt-auto">
+                <button class="btn btn-primary btn-sm rounded-pill add-to-lidarr-btn w-100">Add to Lidarr</button>
+                <div class="d-flex gap-2">
+                  <button class="btn btn-outline-primary btn-sm rounded-pill get-preview-btn flex-fill">Bio</button>
+                  <button class="btn btn-outline-secondary btn-sm rounded-pill listen-sample-btn flex-fill">Listen</button>
                 </div>
               </div>
-              <div class="row mt-auto pt-2">
-                <div class="col">
-                  <p class="card-text followers"></p>
-                </div>
-                <div class="col">
-                  <p class="card-text text-end popularity"></p>
-                </div>
+              <div class="artist-meta text-body-secondary small d-flex justify-content-between pt-2 border-top border-secondary-subtle">
+                <span class="followers"></span>
+                <span class="popularity text-end"></span>
               </div>
             </div>
-          </div>
+          </article>
         </div>
       </template>
+    </div>
+  </div>
+
+  <!-- AI Helper Modal -->
+  <div class="modal fade" id="ai-helper-modal" tabindex="-1" aria-labelledby="ai-helper-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <form id="ai-helper-form">
+          <div class="modal-header">
+            <h5 class="modal-title" id="ai-helper-title">AI Music Assistant</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p class="text-muted small mb-3">
+              Describe the vibe, genres, or artists you're looking for. We'll use AI to suggest new artists to explore.
+            </p>
+            <div class="mb-3">
+              <label for="ai-helper-input" class="form-label">What should we find?</label>
+              <textarea class="form-control" id="ai-helper-input" rows="4" placeholder="e.g., Dreamy synth-pop similar to M83 and Beach House"></textarea>
+            </div>
+            <div id="ai-helper-error" class="alert alert-danger d-none" role="alert"></div>
+            <div id="ai-helper-results" class="alert alert-info d-none" role="alert"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="submit" id="ai-helper-submit" class="btn btn-primary">
+              <span class="spinner-border spinner-border-sm me-2 d-none" id="ai-helper-spinner" role="status" aria-hidden="true"></span>
+              Ask AI
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 
@@ -184,7 +302,7 @@
           <h5 class="modal-title" id="bio-modal-title">Modal title</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <div class="modal-body" id="modal-body">
+  <div class="modal-body bio-modal-body" id="modal-body">
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>

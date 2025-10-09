@@ -18,12 +18,51 @@ var lidarr_select_all_container = document.getElementById(
 var config_modal = document.getElementById('config-modal');
 var lidarr_sidebar = document.getElementById('lidarr-sidebar');
 
+const START_LABEL = 'Start discovery';
+const STOP_LABEL = 'Stop';
+
 var save_message = document.getElementById('save-message');
 var save_changes_button = document.getElementById('save-changes-button');
+var settings_form = document.getElementById('settings-form');
 const lidarr_address = document.getElementById('lidarr-address');
 const lidarr_api_key = document.getElementById('lidarr-api-key');
 const root_folder_path = document.getElementById('root-folder-path');
 const youtube_api_key = document.getElementById('youtube-api-key');
+const openai_api_key_input = document.getElementById('openai-api-key');
+const openai_model_input = document.getElementById('openai-model');
+const openai_max_seed_artists_input = document.getElementById(
+	'openai-max-seed-artists'
+);
+const similar_artist_batch_size_input = document.getElementById(
+	'similar-artist-batch-size'
+);
+const quality_profile_id_input = document.getElementById('quality-profile-id');
+const metadata_profile_id_input = document.getElementById(
+	'metadata-profile-id'
+);
+const lidarr_api_timeout_input = document.getElementById('lidarr-api-timeout');
+const fallback_to_top_result_checkbox = document.getElementById(
+	'fallback-to-top-result'
+);
+const search_for_missing_albums_checkbox = document.getElementById(
+	'search-for-missing-albums'
+);
+const dry_run_adding_to_lidarr_checkbox = document.getElementById(
+	'dry-run-adding-to-lidarr'
+);
+const auto_start_checkbox = document.getElementById('auto-start');
+const auto_start_delay_input = document.getElementById('auto-start-delay');
+const last_fm_api_key_input = document.getElementById('last-fm-api-key');
+const last_fm_api_secret_input = document.getElementById('last-fm-api-secret');
+
+const ai_assist_button = document.getElementById('ai-assist-button');
+const ai_helper_modal = document.getElementById('ai-helper-modal');
+const ai_helper_form = document.getElementById('ai-helper-form');
+const ai_helper_input = document.getElementById('ai-helper-input');
+const ai_helper_error = document.getElementById('ai-helper-error');
+const ai_helper_results = document.getElementById('ai-helper-results');
+const ai_helper_submit = document.getElementById('ai-helper-submit');
+const ai_helper_spinner = document.getElementById('ai-helper-spinner');
 
 var lidarr_items = [];
 var socket = io({
@@ -34,6 +73,47 @@ var socket = io({
 let initialLoadComplete = false;
 let initialLoadHasMore = false;
 let loadMorePending = false;
+
+if (ai_helper_modal) {
+	ai_helper_modal.addEventListener('hidden.bs.modal', function () {
+		if (ai_helper_input) {
+			ai_helper_input.value = '';
+		}
+		reset_ai_feedback();
+		set_ai_form_loading(false);
+		if (ai_helper_submit) {
+			ai_helper_submit.blur();
+		}
+	});
+}
+
+if (ai_helper_form) {
+	ai_helper_form.addEventListener('submit', function (event) {
+		event.preventDefault();
+		if (!socket.connected) {
+			show_toast('Connection Lost', 'Please reconnect to continue.');
+			return;
+		}
+		if (!ai_helper_input) {
+			return;
+		}
+		var prompt = ai_helper_input.value.trim();
+		if (!prompt) {
+			if (ai_helper_error) {
+				ai_helper_error.textContent =
+					'Tell us what to search for before asking the AI assistant.';
+				ai_helper_error.classList.remove('d-none');
+			}
+			return;
+		}
+		reset_ai_feedback();
+		set_ai_form_loading(true);
+		begin_ai_discovery_flow();
+		socket.emit('ai_prompt_req', {
+			prompt: prompt,
+		});
+	});
+}
 
 function show_header_spinner() {
 	if (header_spinner) {
@@ -56,6 +136,70 @@ function escape_html(text) {
 	return div.innerHTML;
 }
 
+function render_biography_html(biography) {
+	if (typeof biography !== 'string') {
+		return '';
+	}
+	var trimmed = biography.trim();
+	if (!trimmed) {
+		return '';
+	}
+	var containsHtml = /<\/?[a-z][\s\S]*>/i.test(trimmed);
+	if (containsHtml) {
+		var sanitizedHtml;
+		if (typeof DOMPurify !== 'undefined') {
+			sanitizedHtml = DOMPurify.sanitize(trimmed, {
+				USE_PROFILES: { html: true },
+			});
+		} else {
+			sanitizedHtml = escape_html(trimmed);
+		}
+		if (
+			sanitizedHtml &&
+			!/<p[\s>]/i.test(sanitizedHtml) &&
+			/\n/.test(sanitizedHtml)
+		) {
+			var htmlBlocks = sanitizedHtml
+				.split(/\n{2,}/)
+				.map(function (block) {
+					return block.trim();
+				})
+				.filter(function (block) {
+					return block.length > 0;
+				})
+				.map(function (block) {
+					return '<p>' + block.replace(/\n/g, '<br>') + '</p>';
+				})
+				.join('');
+			if (htmlBlocks) {
+				return htmlBlocks;
+			}
+		}
+		return sanitizedHtml;
+	}
+	var paragraphs = trimmed
+		.split(/\n{2,}/)
+		.map(function (block) {
+			return block.trim();
+		})
+		.filter(function (block) {
+			return block.length > 0;
+		})
+		.map(function (block) {
+			return '<p>' + escape_html(block).replace(/\n/g, '<br>') + '</p>';
+		})
+		.join('');
+	if (!paragraphs) {
+		return escape_html(trimmed);
+	}
+	if (typeof DOMPurify !== 'undefined') {
+		return DOMPurify.sanitize(paragraphs, {
+			USE_PROFILES: { html: true },
+		});
+	}
+	return paragraphs;
+}
+
 function render_loading_spinner(message) {
 	return `
         <div class="d-flex justify-content-center align-items-center py-4">
@@ -64,6 +208,35 @@ function render_loading_spinner(message) {
             </div>
         </div>
     `;
+}
+
+function reset_ai_feedback() {
+	if (ai_helper_error) {
+		ai_helper_error.textContent = '';
+		ai_helper_error.classList.add('d-none');
+	}
+	if (ai_helper_results) {
+		ai_helper_results.innerHTML = '';
+		ai_helper_results.classList.add('d-none');
+	}
+}
+
+function set_ai_form_loading(isLoading) {
+	if (ai_helper_submit) {
+		ai_helper_submit.disabled = isLoading;
+	}
+	if (ai_helper_spinner) {
+		if (isLoading) {
+			ai_helper_spinner.classList.remove('d-none');
+		} else {
+			ai_helper_spinner.classList.add('d-none');
+		}
+	}
+}
+
+function begin_ai_discovery_flow() {
+	clear_all();
+	show_header_spinner();
 }
 
 function show_modal_with_lock(modalId, onHidden) {
@@ -216,7 +389,7 @@ function load_lidarr_data(response) {
 	if (response.Running) {
 		start_stop_button.classList.remove('btn-success');
 		start_stop_button.classList.add('btn-warning');
-		start_stop_button.textContent = 'Stop';
+		start_stop_button.textContent = STOP_LABEL;
 		every_check_box.forEach((item) => {
 			item.disabled = true;
 		});
@@ -225,7 +398,7 @@ function load_lidarr_data(response) {
 	} else {
 		start_stop_button.classList.add('btn-success');
 		start_stop_button.classList.remove('btn-warning');
-		start_stop_button.textContent = 'Start';
+		start_stop_button.textContent = START_LABEL;
 		every_check_box.forEach((item) => {
 			item.disabled = false;
 		});
@@ -261,6 +434,12 @@ function append_artists(artists) {
 	artists.forEach(function (artist) {
 		var clone = document.importNode(template.content, true);
 		var artist_col = clone.querySelector('#artist-column');
+		var cardEl = artist_col.querySelector('.artist-card');
+		var statusDot = cardEl ? cardEl.querySelector('.led') : null;
+		var imageContainer = artist_col.querySelector('.artist-img-container');
+		var coverImage = imageContainer
+			? imageContainer.querySelector('.card-img-top')
+			: null;
 
 		artist_col.querySelector('.card-title').textContent = artist.Name;
 		var similarityEl = artist_col.querySelector('.similarity');
@@ -288,13 +467,32 @@ function append_artists(artists) {
 			}
 		}
 		artist_col.querySelector('.genre').textContent = artist.Genre;
-		if (artist.Img_Link) {
-			artist_col.querySelector('.card-img-top').src = artist.Img_Link;
-			artist_col.querySelector('.card-img-top').alt = artist.Name;
-		} else {
-			artist_col
-				.querySelector('.artist-img-container')
-				.removeChild(artist_col.querySelector('.card-img-top'));
+		if (imageContainer) {
+			imageContainer.classList.remove('artist-placeholder');
+			var existingPlaceholder = imageContainer.querySelector(
+				'.artist-placeholder-letter'
+			);
+			if (existingPlaceholder) {
+				existingPlaceholder.remove();
+			}
+		}
+		if (artist.Img_Link && coverImage) {
+			coverImage.src = artist.Img_Link;
+			coverImage.alt = artist.Name;
+			coverImage.classList.remove('d-none');
+		} else if (imageContainer) {
+			if (coverImage) {
+				coverImage.remove();
+			}
+			imageContainer.classList.add('artist-placeholder');
+			var placeholderSpan = document.createElement('span');
+			placeholderSpan.className = 'artist-placeholder-letter';
+			var firstLetter =
+				typeof artist.Name === 'string' && artist.Name.length > 0
+					? artist.Name.charAt(0).toUpperCase()
+					: '?';
+			placeholderSpan.textContent = firstLetter;
+			imageContainer.appendChild(placeholderSpan);
 		}
 		var add_button = artist_col.querySelector('.add-to-lidarr-btn');
 		add_button.dataset.defaultText =
@@ -316,13 +514,13 @@ function append_artists(artists) {
 		artist_col.querySelector('.followers').textContent = artist.Followers;
 		artist_col.querySelector('.popularity').textContent = artist.Popularity;
 
+		var statusValue = 'info';
+
 		if (
 			artist.Status === 'Added' ||
 			artist.Status === 'Already in Lidarr'
 		) {
-			artist_col
-				.querySelector('.card-body')
-				.classList.add('status-green');
+			statusValue = 'success';
 			add_button.classList.remove('btn-primary');
 			add_button.classList.add('btn-secondary');
 			add_button.disabled = true;
@@ -331,13 +529,16 @@ function append_artists(artists) {
 			artist.Status === 'Failed to Add' ||
 			artist.Status === 'Invalid Path'
 		) {
-			artist_col.querySelector('.card-body').classList.add('status-red');
+			statusValue = 'danger';
 			add_button.classList.remove('btn-primary');
 			add_button.classList.add('btn-danger');
 			add_button.disabled = true;
 			add_button.textContent = artist.Status;
 		} else {
-			artist_col.querySelector('.card-body').classList.add('status-blue');
+			statusValue = 'info';
+		}
+		if (statusDot) {
+			statusDot.dataset.status = statusValue;
 		}
 		artist_row.appendChild(clone);
 	});
@@ -413,7 +614,7 @@ lidarr_get_artists_button.addEventListener('click', function () {
 
 start_stop_button.addEventListener('click', function () {
 	var running_state =
-		start_stop_button.textContent.trim() === 'Start' ? true : false;
+		start_stop_button.textContent.trim() === START_LABEL ? true : false;
 	if (running_state) {
 		// Reset initial load state and show overlay until first results arrive
 		initialLoadComplete = false;
@@ -424,7 +625,7 @@ start_stop_button.addEventListener('click', function () {
 
 		start_stop_button.classList.remove('btn-success');
 		start_stop_button.classList.add('btn-warning');
-		start_stop_button.textContent = 'Stop';
+		start_stop_button.textContent = STOP_LABEL;
 		var checked_items = Array.from(
 			document.querySelectorAll('input[name="lidarr-item"]:checked')
 		).map((item) => item.value);
@@ -441,7 +642,7 @@ start_stop_button.addEventListener('click', function () {
 
 		start_stop_button.classList.add('btn-success');
 		start_stop_button.classList.remove('btn-warning');
-		start_stop_button.textContent = 'Start';
+		start_stop_button.textContent = START_LABEL;
 		document
 			.querySelectorAll('input[name="lidarr-item"]')
 			.forEach((item) => {
@@ -465,34 +666,220 @@ if (load_more_button) {
 	});
 }
 
-if (save_changes_button && config_modal) {
-	save_changes_button.addEventListener('click', () => {
-		socket.emit('update_settings', {
-			lidarr_address: lidarr_address.value,
-			lidarr_api_key: lidarr_api_key.value,
-			root_folder_path: root_folder_path.value,
-			youtube_api_key: youtube_api_key.value,
-		});
-		if (save_message) {
-			save_message.style.display = 'block';
-			setTimeout(function () {
-				save_message.style.display = 'none';
-			}, 1000);
+function build_settings_payload() {
+	return {
+		lidarr_address: lidarr_address ? lidarr_address.value : '',
+		lidarr_api_key: lidarr_api_key ? lidarr_api_key.value : '',
+		root_folder_path: root_folder_path ? root_folder_path.value : '',
+		youtube_api_key: youtube_api_key ? youtube_api_key.value : '',
+		openai_api_key: openai_api_key_input ? openai_api_key_input.value : '',
+		openai_model: openai_model_input ? openai_model_input.value : '',
+		openai_max_seed_artists: openai_max_seed_artists_input
+			? openai_max_seed_artists_input.value
+			: '',
+		similar_artist_batch_size: similar_artist_batch_size_input
+			? similar_artist_batch_size_input.value
+			: '',
+		quality_profile_id: quality_profile_id_input
+			? quality_profile_id_input.value
+			: '',
+		metadata_profile_id: metadata_profile_id_input
+			? metadata_profile_id_input.value
+			: '',
+		lidarr_api_timeout: lidarr_api_timeout_input
+			? lidarr_api_timeout_input.value
+			: '',
+		fallback_to_top_result: fallback_to_top_result_checkbox
+			? fallback_to_top_result_checkbox.checked
+			: false,
+		search_for_missing_albums: search_for_missing_albums_checkbox
+			? search_for_missing_albums_checkbox.checked
+			: false,
+		dry_run_adding_to_lidarr: dry_run_adding_to_lidarr_checkbox
+			? dry_run_adding_to_lidarr_checkbox.checked
+			: false,
+		auto_start: auto_start_checkbox ? auto_start_checkbox.checked : false,
+		auto_start_delay: auto_start_delay_input
+			? auto_start_delay_input.value
+			: '',
+		last_fm_api_key: last_fm_api_key_input
+			? last_fm_api_key_input.value
+			: '',
+		last_fm_api_secret: last_fm_api_secret_input
+			? last_fm_api_secret_input.value
+			: '',
+	};
+}
+
+function populate_settings_form(settings) {
+	if (!settings) {
+		return;
+	}
+	if (lidarr_address) {
+		lidarr_address.value = settings.lidarr_address || '';
+	}
+	if (lidarr_api_key) {
+		lidarr_api_key.value = settings.lidarr_api_key || '';
+	}
+	if (root_folder_path) {
+		root_folder_path.value = settings.root_folder_path || '';
+	}
+	if (youtube_api_key) {
+		youtube_api_key.value = settings.youtube_api_key || '';
+	}
+	if (quality_profile_id_input) {
+		const qualityProfile = settings.quality_profile_id;
+		quality_profile_id_input.value =
+			qualityProfile === undefined || qualityProfile === null
+				? ''
+				: qualityProfile;
+	}
+	if (metadata_profile_id_input) {
+		const metadataProfile = settings.metadata_profile_id;
+		metadata_profile_id_input.value =
+			metadataProfile === undefined || metadataProfile === null
+				? ''
+				: metadataProfile;
+	}
+	if (lidarr_api_timeout_input) {
+		const apiTimeout = settings.lidarr_api_timeout;
+		lidarr_api_timeout_input.value =
+			apiTimeout === undefined || apiTimeout === null ? '' : apiTimeout;
+	}
+	if (fallback_to_top_result_checkbox) {
+		fallback_to_top_result_checkbox.checked = Boolean(
+			settings.fallback_to_top_result
+		);
+	}
+	if (search_for_missing_albums_checkbox) {
+		search_for_missing_albums_checkbox.checked = Boolean(
+			settings.search_for_missing_albums
+		);
+	}
+	if (dry_run_adding_to_lidarr_checkbox) {
+		dry_run_adding_to_lidarr_checkbox.checked = Boolean(
+			settings.dry_run_adding_to_lidarr
+		);
+	}
+	if (similar_artist_batch_size_input) {
+		const batchSize = settings.similar_artist_batch_size;
+		similar_artist_batch_size_input.value =
+			batchSize === undefined || batchSize === null ? '' : batchSize;
+	}
+	if (auto_start_checkbox) {
+		auto_start_checkbox.checked = Boolean(settings.auto_start);
+	}
+	if (auto_start_delay_input) {
+		const autoStartDelay = settings.auto_start_delay;
+		auto_start_delay_input.value =
+			autoStartDelay === undefined || autoStartDelay === null
+				? ''
+				: autoStartDelay;
+	}
+	if (last_fm_api_key_input) {
+		last_fm_api_key_input.value = settings.last_fm_api_key || '';
+	}
+	if (last_fm_api_secret_input) {
+		last_fm_api_secret_input.value = settings.last_fm_api_secret || '';
+	}
+	if (openai_api_key_input) {
+		openai_api_key_input.value = settings.openai_api_key || '';
+	}
+	if (openai_model_input) {
+		openai_model_input.value = settings.openai_model || '';
+	}
+	if (openai_max_seed_artists_input) {
+		const maxSeedArtists = settings.openai_max_seed_artists;
+		openai_max_seed_artists_input.value =
+			maxSeedArtists === undefined || maxSeedArtists === null
+				? ''
+				: maxSeedArtists;
+	}
+}
+
+function handle_settings_saved(payload) {
+	if (save_changes_button) {
+		save_changes_button.disabled = false;
+	}
+	if (save_message) {
+		save_message.classList.remove('alert-danger');
+		if (!save_message.classList.contains('alert-success')) {
+			save_message.classList.add('alert-success');
 		}
+		save_message.classList.remove('d-none');
+		save_message.textContent =
+			(payload && payload.message) || 'Settings saved successfully.';
+	}
+	show_toast(
+		'Settings saved',
+		(payload && payload.message) || 'Configuration updated successfully.'
+	);
+}
+
+function handle_settings_save_error(payload) {
+	if (save_changes_button) {
+		save_changes_button.disabled = false;
+	}
+	const message =
+		(payload && payload.message) ||
+		'Saving settings failed. Check the logs for more details.';
+	if (save_message) {
+		save_message.classList.remove('d-none');
+		save_message.classList.remove('alert-success');
+		save_message.classList.add('alert-danger');
+		save_message.textContent = message;
+	}
+	show_toast('Settings error', message);
+}
+
+function reset_save_message() {
+	if (!save_message) {
+		return;
+	}
+	save_message.classList.add('d-none');
+	save_message.classList.remove('alert-danger');
+	if (!save_message.classList.contains('alert-success')) {
+		save_message.classList.add('alert-success');
+	}
+	save_message.textContent = 'Settings saved successfully.';
+}
+
+if (settings_form && config_modal) {
+	settings_form.addEventListener('submit', (event) => {
+		event.preventDefault();
+		if (!socket.connected) {
+			show_toast('Connection Lost', 'Please reconnect to continue.');
+			return;
+		}
+		reset_save_message();
+		if (save_changes_button) {
+			save_changes_button.disabled = true;
+		}
+		socket.emit('update_settings', build_settings_payload());
 	});
 
-	config_modal.addEventListener('show.bs.modal', function () {
+	const handle_modal_show = () => {
+		reset_save_message();
+		if (save_changes_button) {
+			save_changes_button.disabled = false;
+		}
+		socket.on('settingsLoaded', populate_settings_form);
 		socket.emit('load_settings');
+	};
 
-		function handle_settings_loaded(settings) {
-			lidarr_address.value = settings.lidarr_address;
-			lidarr_api_key.value = settings.lidarr_api_key;
-			root_folder_path.value = settings.root_folder_path;
-			youtube_api_key.value = settings.youtube_api_key;
-			socket.off('settingsLoaded', handle_settings_loaded);
+	const handle_modal_hidden = () => {
+		socket.off('settingsLoaded', populate_settings_form);
+		reset_save_message();
+		if (save_changes_button) {
+			save_changes_button.disabled = false;
 		}
-		socket.on('settingsLoaded', handle_settings_loaded);
-	});
+	};
+
+	config_modal.addEventListener('show.bs.modal', handle_modal_show);
+	config_modal.addEventListener('hidden.bs.modal', handle_modal_hidden);
+
+	socket.on('settingsSaved', handle_settings_saved);
+	socket.on('settingsSaveError', handle_settings_save_error);
 }
 
 lidarr_sidebar.addEventListener('show.bs.offcanvas', function (event) {
@@ -551,25 +938,23 @@ socket.on('lidarr_sidebar_update', (response) => {
 socket.on('refresh_artist', (artist) => {
 	var artist_cards = document.querySelectorAll('#artist-column');
 	artist_cards.forEach(function (card) {
-		var card_body = card.querySelector('.card-body');
-		var card_artist_name = card_body
-			.querySelector('.card-title')
-			.textContent.trim();
+		var cardEl = card.querySelector('.artist-card');
+		if (!cardEl) {
+			return;
+		}
+		var titleEl = cardEl.querySelector('.card-title');
+		var card_artist_name = titleEl ? titleEl.textContent.trim() : '';
 
 		if (card_artist_name === artist.Name) {
-			card_body.classList.remove(
-				'status-green',
-				'status-red',
-				'status-blue'
-			);
-
-			var add_button = card_body.querySelector('.add-to-lidarr-btn');
+			var add_button = cardEl.querySelector('.add-to-lidarr-btn');
+			var statusDot = cardEl.querySelector('.led');
+			var statusValue = 'info';
 
 			if (
 				artist.Status === 'Added' ||
 				artist.Status === 'Already in Lidarr'
 			) {
-				card_body.classList.add('status-green');
+				statusValue = 'success';
 				add_button.classList.remove('btn-primary');
 				add_button.classList.add('btn-secondary');
 				add_button.disabled = true;
@@ -579,14 +964,14 @@ socket.on('refresh_artist', (artist) => {
 				artist.Status === 'Failed to Add' ||
 				artist.Status === 'Invalid Path'
 			) {
-				card_body.classList.add('status-red');
+				statusValue = 'danger';
 				add_button.classList.remove('btn-primary');
 				add_button.classList.add('btn-danger');
 				add_button.disabled = true;
 				add_button.innerHTML = artist.Status;
 				add_button.dataset.loading = '';
 			} else {
-				card_body.classList.add('status-blue');
+				statusValue = 'info';
 				add_button.disabled = false;
 				add_button.classList.remove('btn-danger', 'btn-secondary');
 				if (!add_button.classList.contains('btn-primary')) {
@@ -596,6 +981,9 @@ socket.on('refresh_artist', (artist) => {
 					add_button.dataset.defaultText || 'Add to Lidarr';
 				add_button.dataset.loading = '';
 			}
+			if (statusDot) {
+				statusDot.dataset.status = statusValue;
+			}
 			return;
 		}
 	});
@@ -603,6 +991,43 @@ socket.on('refresh_artist', (artist) => {
 
 socket.on('more_artists_loaded', function (data) {
 	append_artists(data);
+});
+
+socket.on('ai_prompt_ack', function (payload) {
+	set_ai_form_loading(false);
+	if (payload && Array.isArray(payload.seeds) && payload.seeds.length > 0) {
+		var listItems = payload.seeds
+			.map(function (seed) {
+				return `<li>${escape_html(seed)}</li>`;
+			})
+			.join('');
+		if (ai_helper_results) {
+			ai_helper_results.innerHTML = `<strong>AI picked these seed artists:</strong><ul class="mt-2 mb-0">${listItems}</ul>`;
+			ai_helper_results.classList.remove('d-none');
+		}
+		show_toast(
+			'AI Discovery',
+			'Working from fresh seed artists suggested by the assistant.'
+		);
+	} else if (ai_helper_results) {
+		ai_helper_results.textContent =
+			"AI discovery started. We'll surface artists as soon as we find them.";
+		ai_helper_results.classList.remove('d-none');
+	}
+});
+
+socket.on('ai_prompt_error', function (payload) {
+	set_ai_form_loading(false);
+	var message =
+		payload && payload.message
+			? payload.message
+			: 'We could not complete the AI request right now.';
+	if (ai_helper_error) {
+		ai_helper_error.textContent = message;
+		ai_helper_error.classList.remove('d-none');
+	}
+	hide_header_spinner();
+	show_toast('AI Assistant', message);
 });
 
 // Server signals that initial batches are complete: show the Load More button now
@@ -692,7 +1117,13 @@ socket.on('lastfm_preview', function (preview_info) {
 		modal_title.textContent = artist_name;
 	}
 	if (modal_body) {
-		modal_body.innerHTML = DOMPurify.sanitize(biography);
+		var biographyHtml = render_biography_html(biography);
+		if (biographyHtml) {
+			modal_body.innerHTML = biographyHtml;
+		} else {
+			modal_body.innerHTML =
+				'<div class="alert alert-info mb-0">No formatted biography was returned for this artist.</div>';
+		}
 	}
 	if (modalEl && !modalEl.classList.contains('show')) {
 		show_modal_with_lock('bio-modal-modal');

@@ -11,7 +11,7 @@ import time
 import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import musicbrainzngs
 import pylast
@@ -20,6 +20,7 @@ from thefuzz import fuzz
 from unidecode import unidecode
 
 from ..config import get_env_value
+from .openai_client import DEFAULT_MAX_SEED_ARTISTS, OpenAIRecommender
 
 
 @dataclass
@@ -33,6 +34,7 @@ class SessionState:
     similar_artist_candidates: List[dict] = field(default_factory=list)
     similar_artist_batch_pointer: int = 0
     initial_batch_sent: bool = False
+    ai_seed_artists: List[str] = field(default_factory=list)
     stop_event: threading.Event = field(default_factory=threading.Event)
     search_lock: threading.Lock = field(default_factory=threading.Lock)
     running: bool = False
@@ -46,6 +48,7 @@ class SessionState:
         self.similar_artist_candidates.clear()
         self.similar_artist_batch_pointer = 0
         self.initial_batch_sent = False
+        self.ai_seed_artists.clear()
         self.stop_event.clear()
         self.running = True
 
@@ -55,6 +58,8 @@ class SessionState:
 
 
 class DataHandler:
+    _version_logged = False
+
     def __init__(self, socketio, logger: Optional[logging.Logger], app_config: Dict[str, Any]) -> None:
         self.socketio = socketio
         self.logger = logger or logging.getLogger("sonobarr")
@@ -65,9 +70,9 @@ class DataHandler:
 
         app_name_text = Path(__file__).name.replace(".py", "")
         release_version = (app_config.get("APP_VERSION") or get_env_value("release_version", "unknown") or "unknown")
-        self.logger.warning(f"{'*' * 50}\n")
-        self.logger.warning(f"{app_name_text} Version: {release_version}\n")
-        self.logger.warning(f"{'*' * 50}")
+        if not DataHandler._version_logged:
+            self.logger.info("%s initialised (version=%s)", app_name_text, release_version)
+            DataHandler._version_logged = True
 
         self.sessions: Dict[str, SessionState] = {}
         self.sessions_lock = threading.Lock()
@@ -83,6 +88,10 @@ class DataHandler:
         settings_path = app_config.get("SETTINGS_FILE")
         self.settings_config_file = Path(settings_path) if settings_path else self.config_folder / "settings_config.json"
         self.similar_artist_batch_size = 10
+        self.openai_api_key = ""
+        self.openai_model = ""
+        self.openai_max_seed_artists = DEFAULT_MAX_SEED_ARTISTS
+        self.openai_recommender: Optional[OpenAIRecommender] = None
 
         self.load_environ_or_config_settings()
 
@@ -242,6 +251,200 @@ class DataHandler:
         with session.search_lock:
             self.load_similar_artist_batch(session, sid)
 
+    def ai_prompt(self, sid: str, prompt: str) -> None:
+        session = self.ensure_session(sid)
+        prompt_text = (prompt or "").strip()
+        if not prompt_text:
+            self.socketio.emit(
+                "ai_prompt_error",
+                {
+                    "message": "Describe what kind of music you're after so the AI assistant can help.",
+                },
+                room=sid,
+            )
+            return
+
+        if not self.openai_recommender:
+            self.socketio.emit(
+                "ai_prompt_error",
+                {
+                    "message": "AI assistant isn't configured yet. Add an OpenAI API key in settings.",
+                },
+                room=sid,
+            )
+            return
+
+        with self.cache_lock:
+            library_artists = list(self.cached_lidarr_names)
+            cleaned_library_names = set(self.cached_cleaned_lidarr_names)
+
+        prompt_preview = prompt_text if len(prompt_text) <= 120 else f"{prompt_text[:117]}..."
+        model_name = getattr(self.openai_recommender, "model", "unknown")
+        timeout_value = getattr(self.openai_recommender, "timeout", None)
+        self.logger.info(
+            "AI prompt started (model=%s, timeout=%s, library_size=%d, prompt=\"%s\")",
+            model_name,
+            timeout_value,
+            len(library_artists),
+            prompt_preview,
+        )
+
+        start_time = time.perf_counter()
+        try:
+            seeds = self.openai_recommender.generate_seed_artists(prompt_text, library_artists)
+        except Exception as exc:  # pragma: no cover - network errors
+            elapsed = time.perf_counter() - start_time
+            self.logger.error("AI prompt failed after %.2fs: %s", elapsed, exc)
+            message = "We couldn't reach the AI assistant. Please try again in a moment."
+            if "timed out" in str(exc).lower():
+                message = "The AI request timed out. Please try again or adjust the prompt."
+            self.socketio.emit(
+                "ai_prompt_error",
+                {
+                    "message": message,
+                },
+                room=sid,
+            )
+            return
+
+        if not seeds:
+            elapsed = time.perf_counter() - start_time
+            self.logger.info("AI prompt completed in %.2fs but returned no artists", elapsed)
+            self.socketio.emit(
+                "ai_prompt_error",
+                {
+                    "message": "The AI couldn't suggest any artists from that request. Try adding genre or artist hints.",
+                },
+                room=sid,
+            )
+            return
+
+        filtered_seeds: List[str] = []
+        skipped_existing: List[str] = []
+        for seed in seeds:
+            normalized_seed = unidecode(seed).lower()
+            if normalized_seed in cleaned_library_names:
+                skipped_existing.append(seed)
+                continue
+            filtered_seeds.append(seed)
+
+        if not filtered_seeds:
+            elapsed = time.perf_counter() - start_time
+            self.logger.info(
+                "AI prompt completed in %.2fs but every seed matched an existing Lidarr artist", elapsed
+            )
+            self.socketio.emit(
+                "ai_prompt_error",
+                {
+                    "message": "All suggested artists are already in your Lidarr library. Try a different prompt.",
+                },
+                room=sid,
+            )
+            return
+
+        if skipped_existing:
+            self.logger.info(
+                "Filtered %d AI seed(s) already present in Lidarr: %s",
+                len(skipped_existing),
+                ", ".join(skipped_existing),
+            )
+            toast_message = (
+                f"{len(skipped_existing)} AI suggestion(s) are already in your Lidarr library."
+                if len(skipped_existing) > 1
+                else f"{skipped_existing[0]} is already in your Lidarr library."
+            )
+            self.socketio.emit(
+                "new_toast_msg",
+                {
+                    "title": "Skipping known artists",
+                    "message": toast_message,
+                },
+                room=sid,
+            )
+
+        seeds = filtered_seeds
+
+        elapsed = time.perf_counter() - start_time
+        self.logger.info("AI prompt succeeded in %.2fs with %d seed artists", elapsed, len(seeds))
+
+        session.prepare_for_search()
+        if not session.lidarr_items:
+            session.lidarr_items = self._copy_cached_lidarr_items()
+        if not session.cleaned_lidarr_items:
+            session.cleaned_lidarr_items = self._copy_cached_cleaned_names()
+        session.artists_to_use_in_search = seeds
+        session.ai_seed_artists = list(seeds)
+
+        self.socketio.emit("ai_prompt_ack", {"seeds": seeds}, room=sid)
+        self.socketio.emit("clear", room=sid)
+        payload = {
+            "Status": "Success",
+            "Data": session.lidarr_items,
+            "Running": session.running,
+        }
+        self.socketio.emit("lidarr_sidebar_update", payload, room=sid)
+
+        existing_names = {unidecode(item["Name"]).lower() for item in session.recommended_artists}
+        missing_names: List[str] = []
+        streamed_any = False
+
+        for payload in self._iter_artist_payloads_from_names(seeds, missing=missing_names):
+            normalized = unidecode(payload["Name"]).lower()
+            if normalized in existing_names:
+                continue
+            session.recommended_artists.append(payload)
+            existing_names.add(normalized)
+            streamed_any = True
+            self.socketio.emit("more_artists_loaded", [payload], room=sid)
+
+        if not streamed_any:
+            self.logger.error("Failed to build artist cards for AI seeds: %s", seeds)
+            self.socketio.emit(
+                "ai_prompt_error",
+                {
+                    "message": "We couldn't load those artists from our data sources. Try refining your request.",
+                },
+                room=sid,
+            )
+            session.running = False
+            self.socketio.emit(
+                "lidarr_sidebar_update",
+                {
+                    "Status": "Success",
+                    "Data": session.lidarr_items,
+                    "Running": session.running,
+                },
+                room=sid,
+            )
+            return
+
+        if missing_names:
+            self.logger.warning("AI suggested artists not found in Last.fm lookup: %s", ", ".join(missing_names))
+            self.socketio.emit(
+                "new_toast_msg",
+                {
+                    "title": "Missing artist data",
+                    "message": "Some AI picks couldn't be fully loaded.",
+                },
+                room=sid,
+            )
+
+        self.prepare_similar_artist_candidates(session)
+        has_more = bool(session.similar_artist_candidates)
+        session.initial_batch_sent = True
+        session.running = False
+        self.socketio.emit("initial_load_complete", {"hasMore": has_more}, room=sid)
+
+        self.socketio.emit(
+            "lidarr_sidebar_update",
+            {
+                "Status": "Success",
+                "Data": session.lidarr_items,
+                "Running": session.running,
+            },
+            room=sid,
+        )
+
     def stop(self, sid: str) -> None:
         session = self.ensure_session(sid)
         session.mark_stopped()
@@ -263,13 +466,18 @@ class DataHandler:
         )
 
         seen_candidates = set()
+        seed_names = {unidecode(name).lower() for name in session.ai_seed_artists}
         for artist_name in session.artists_to_use_in_search:
             try:
                 chosen_artist = lfm.get_artist(artist_name)
                 related_artists = chosen_artist.get_similar()
                 for related_artist in related_artists:
                     cleaned_artist = unidecode(related_artist.item.name).lower()
-                    if cleaned_artist in session.cleaned_lidarr_items or cleaned_artist in seen_candidates:
+                    if (
+                        cleaned_artist in session.cleaned_lidarr_items
+                        or cleaned_artist in seen_candidates
+                        or cleaned_artist in seed_names
+                    ):
                         continue
                     seen_candidates.add(cleaned_artist)
                     raw_match = getattr(related_artist, "match", None)
@@ -314,64 +522,34 @@ class DataHandler:
             api_secret=self.last_fm_api_secret,
         )
 
+        existing_names = {unidecode(item["Name"]).lower() for item in session.recommended_artists}
+
         for candidate in batch:
             if session.stop_event.is_set():
                 break
             related_artist = candidate["artist"]
             similarity_score = candidate.get("match")
+            artist_name = related_artist.item.name
+            normalized = unidecode(artist_name).lower()
+            if normalized in existing_names:
+                continue
             try:
-                artist_obj = lfm_network.get_artist(related_artist.item.name)
-                genres = ", ".join(
-                    [tag.item.get_name().title() for tag in artist_obj.get_top_tags()[:5]]
-                ) or "Unknown Genre"
-                try:
-                    listeners = artist_obj.get_listener_count() or 0
-                except Exception:
-                    listeners = 0
-                try:
-                    play_count = artist_obj.get_playcount() or 0
-                except Exception:
-                    play_count = 0
-
-                img_link = None
-                try:
-                    endpoint = "https://api.deezer.com/search/artist"
-                    params = {"q": related_artist.item.name}
-                    response = requests.get(endpoint, params=params, timeout=10)
-                    data = response.json()
-                    if data.get("data"):
-                        artist_info = data["data"][0]
-                        img_link = (
-                            artist_info.get("picture_xl")
-                            or artist_info.get("picture_large")
-                            or artist_info.get("picture_medium")
-                            or artist_info.get("picture")
-                        )
-                except Exception:
-                    img_link = None
-
-                if similarity_score is not None:
-                    clamped_similarity = max(0.0, min(1.0, similarity_score))
-                    similarity_label = f"Similarity: {clamped_similarity * 100:.1f}%"
-                else:
-                    clamped_similarity = None
-                    similarity_label = None
-
-                artist_payload = {
-                    "Name": related_artist.item.name,
-                    "Genre": genres,
-                    "Status": "",
-                    "Img_Link": img_link or "https://placehold.co/512x512?text=No+Image",
-                    "Popularity": f"Play Count: {self.format_numbers(play_count)}",
-                    "Followers": f"Listeners: {self.format_numbers(listeners)}",
-                    "SimilarityScore": clamped_similarity,
-                    "Similarity": similarity_label,
-                }
-
-                session.recommended_artists.append(artist_payload)
-                self.socketio.emit("more_artists_loaded", [artist_payload], room=sid)
+                artist_payload = self._fetch_artist_payload(
+                    lfm_network,
+                    artist_name,
+                    similarity_score=similarity_score,
+                )
             except Exception as exc:  # pragma: no cover - network errors
-                self.logger.error(f"Error loading artist {related_artist.item.name}: {exc}")
+                self.logger.error("Error building payload for %s: %s", artist_name, exc)
+                continue
+
+            if not artist_payload:
+                self.logger.error("Artist payload missing for %s", artist_name)
+                continue
+
+            session.recommended_artists.append(artist_payload)
+            existing_names.add(normalized)
+            self.socketio.emit("more_artists_loaded", [artist_payload], room=sid)
 
         session.similar_artist_batch_pointer += len(batch)
         has_more = session.similar_artist_batch_pointer < len(session.similar_artist_candidates)
@@ -533,7 +711,23 @@ class DataHandler:
                 "lidarr_api_key": self.lidarr_api_key,
                 "root_folder_path": self.root_folder_path,
                 "youtube_api_key": self.youtube_api_key,
+                "quality_profile_id": self.quality_profile_id,
+                "metadata_profile_id": self.metadata_profile_id,
+                "lidarr_api_timeout": self.lidarr_api_timeout,
+                "fallback_to_top_result": self.fallback_to_top_result,
+                "search_for_missing_albums": self.search_for_missing_albums,
+                "dry_run_adding_to_lidarr": self.dry_run_adding_to_lidarr,
+                "last_fm_api_key": self.last_fm_api_key,
+                "last_fm_api_secret": self.last_fm_api_secret,
+                "auto_start": self.auto_start,
+                "auto_start_delay": self.auto_start_delay,
+                "openai_api_key": self.openai_api_key,
+                "openai_model": self.openai_model,
+                "openai_max_seed_artists": self.openai_max_seed_artists,
                 "similar_artist_batch_size": self.similar_artist_batch_size,
+                "app_name": self.app_name,
+                "app_rev": self.app_rev,
+                "app_url": self.app_url,
             }
             self.socketio.emit("settingsLoaded", data, room=sid)
         except Exception as exc:
@@ -541,18 +735,119 @@ class DataHandler:
 
     def update_settings(self, data: dict) -> None:
         try:
-            self.lidarr_address = data["lidarr_address"].strip()
-            self.lidarr_api_key = data["lidarr_api_key"].strip()
-            self.root_folder_path = data["root_folder_path"].strip()
-            self.youtube_api_key = data.get("youtube_api_key", "").strip()
-            batch_size = data.get("similar_artist_batch_size")
-            if batch_size is not None:
+            def _clean_str(value: Any) -> str:
+                if value is None:
+                    return ""
+                return str(value).strip()
+
+            def _coerce_bool(value: Any, current: bool) -> bool:
+                if isinstance(value, bool):
+                    return value
+                if value is None:
+                    return current
+                if isinstance(value, (int, float)):
+                    return value != 0
+                value_str = str(value).strip().lower()
+                if value_str == "":
+                    return False
+                return value_str in {"1", "true", "yes", "on"}
+
+            def _coerce_int(value: Any, current: int, minimum: int | None = None) -> int:
+                if value in (None, ""):
+                    return current
                 try:
-                    batch_value = int(batch_size)
+                    parsed = int(value)
                 except (TypeError, ValueError):
-                    batch_value = self.similar_artist_batch_size
-                if batch_value > 0:
-                    self.similar_artist_batch_size = batch_value
+                    return current
+                if minimum is not None and parsed < minimum:
+                    return minimum
+                return parsed
+
+            def _coerce_float(value: Any, current: float, minimum: float | None = None) -> float:
+                if value in (None, ""):
+                    return current
+                try:
+                    parsed = float(value)
+                except (TypeError, ValueError):
+                    return current
+                if minimum is not None and parsed < minimum:
+                    return minimum
+                return parsed
+
+            if "lidarr_address" in data:
+                self.lidarr_address = _clean_str(data.get("lidarr_address"))
+            if "lidarr_api_key" in data:
+                self.lidarr_api_key = _clean_str(data.get("lidarr_api_key"))
+            if "root_folder_path" in data:
+                self.root_folder_path = _clean_str(data.get("root_folder_path"))
+            if "youtube_api_key" in data:
+                self.youtube_api_key = _clean_str(data.get("youtube_api_key"))
+            if "last_fm_api_key" in data:
+                self.last_fm_api_key = _clean_str(data.get("last_fm_api_key"))
+            if "last_fm_api_secret" in data:
+                self.last_fm_api_secret = _clean_str(data.get("last_fm_api_secret"))
+
+            if "quality_profile_id" in data:
+                self.quality_profile_id = _coerce_int(
+                    data.get("quality_profile_id"),
+                    self.quality_profile_id,
+                    minimum=1,
+                )
+            if "metadata_profile_id" in data:
+                self.metadata_profile_id = _coerce_int(
+                    data.get("metadata_profile_id"),
+                    self.metadata_profile_id,
+                    minimum=1,
+                )
+            if "lidarr_api_timeout" in data:
+                self.lidarr_api_timeout = _coerce_float(
+                    data.get("lidarr_api_timeout"),
+                    float(self.lidarr_api_timeout),
+                    minimum=1.0,
+                )
+            if "similar_artist_batch_size" in data:
+                self.similar_artist_batch_size = _coerce_int(
+                    data.get("similar_artist_batch_size"),
+                    self.similar_artist_batch_size,
+                    minimum=1,
+                )
+
+            if "fallback_to_top_result" in data:
+                self.fallback_to_top_result = _coerce_bool(
+                    data.get("fallback_to_top_result"),
+                    self.fallback_to_top_result,
+                )
+            if "search_for_missing_albums" in data:
+                self.search_for_missing_albums = _coerce_bool(
+                    data.get("search_for_missing_albums"),
+                    self.search_for_missing_albums,
+                )
+            if "dry_run_adding_to_lidarr" in data:
+                self.dry_run_adding_to_lidarr = _coerce_bool(
+                    data.get("dry_run_adding_to_lidarr"),
+                    self.dry_run_adding_to_lidarr,
+                )
+            if "auto_start" in data:
+                self.auto_start = _coerce_bool(data.get("auto_start"), self.auto_start)
+            if "auto_start_delay" in data:
+                self.auto_start_delay = _coerce_float(
+                    data.get("auto_start_delay"),
+                    float(self.auto_start_delay),
+                    minimum=0.0,
+                )
+
+            if "openai_api_key" in data:
+                self.openai_api_key = _clean_str(data.get("openai_api_key"))
+            if "openai_model" in data:
+                self.openai_model = _clean_str(data.get("openai_model"))
+            if "openai_max_seed_artists" in data:
+                self.openai_max_seed_artists = _coerce_int(
+                    data.get("openai_max_seed_artists"),
+                    self.openai_max_seed_artists,
+                    minimum=1,
+                )
+
+            self._configure_openai_client()
         except Exception as exc:
             self.logger.error(f"Failed to update settings: {exc}")
 
@@ -690,6 +985,134 @@ class DataHandler:
         self.socketio.emit("prehear_result", result, room=sid)
 
     # Utilities -------------------------------------------------------
+    def _fetch_artist_payload(
+        self,
+        lfm_network: pylast.LastFMNetwork,
+        artist_name: str,
+        *,
+        similarity_score: Optional[float] = None,
+    ) -> Optional[dict]:
+        try:
+            artist_obj = lfm_network.get_artist(artist_name)
+        except Exception as exc:  # pragma: no cover - network errors
+            self.logger.error("Failed to load artist '%s' from Last.fm: %s", artist_name, exc)
+            return None
+
+        try:
+            tags = [tag.item.get_name().title() for tag in artist_obj.get_top_tags()[:5]]
+        except Exception:
+            tags = []
+        genres = ", ".join(tags) or "Unknown Genre"
+
+        try:
+            listeners = artist_obj.get_listener_count() or 0
+        except Exception:
+            listeners = 0
+
+        try:
+            play_count = artist_obj.get_playcount() or 0
+        except Exception:
+            play_count = 0
+
+        img_link = None
+        try:
+            endpoint = "https://api.deezer.com/search/artist"
+            params = {"q": artist_name}
+            response = requests.get(endpoint, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            if data.get("data"):
+                artist_info = data["data"][0]
+                img_link = (
+                    artist_info.get("picture_xl")
+                    or artist_info.get("picture_large")
+                    or artist_info.get("picture_medium")
+                    or artist_info.get("picture")
+                )
+        except Exception:
+            img_link = None
+
+        similarity_label = None
+        clamped_similarity = None
+        if similarity_score is not None:
+            clamped_similarity = max(0.0, min(1.0, similarity_score))
+            similarity_label = f"Similarity: {clamped_similarity * 100:.1f}%"
+
+        display_name = artist_name
+        try:
+            if hasattr(artist_obj, "get_name"):
+                display_name = artist_obj.get_name() or artist_name
+            elif hasattr(artist_obj, "name"):
+                display_name = artist_obj.name or artist_name
+        except Exception:
+            display_name = artist_name
+
+        return {
+            "Name": display_name,
+            "Genre": genres,
+            "Status": "",
+            "Img_Link": img_link or "https://placehold.co/512x512?text=No+Image",
+            "Popularity": f"Play Count: {self.format_numbers(play_count)}",
+            "Followers": f"Listeners: {self.format_numbers(listeners)}",
+            "SimilarityScore": clamped_similarity,
+            "Similarity": similarity_label,
+        }
+
+    def _iter_artist_payloads_from_names(
+        self,
+        names: Sequence[str],
+        *,
+        missing: Optional[List[str]] = None,
+    ) -> Iterable[dict]:
+        if not names:
+            return []
+
+        lfm_network = pylast.LastFMNetwork(
+            api_key=self.last_fm_api_key,
+            api_secret=self.last_fm_api_secret,
+        )
+
+        seen: set[str] = set()
+
+        for raw_name in names:
+            if not raw_name:
+                continue
+            normalized = unidecode(raw_name).lower()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            payload = self._fetch_artist_payload(lfm_network, raw_name)
+            if payload:
+                yield payload
+            elif missing is not None:
+                missing.append(raw_name)
+
+    def _configure_openai_client(self) -> None:
+        api_key = (self.openai_api_key or "").strip()
+        if not api_key:
+            self.openai_recommender = None
+            return
+
+        model = (self.openai_model or "").strip() or None
+        max_seeds = self.openai_max_seed_artists
+        try:
+            max_seeds_int = int(max_seeds)
+        except (TypeError, ValueError):
+            max_seeds_int = DEFAULT_MAX_SEED_ARTISTS
+        if max_seeds_int <= 0:
+            max_seeds_int = DEFAULT_MAX_SEED_ARTISTS
+        self.openai_max_seed_artists = max_seeds_int
+
+        try:
+            self.openai_recommender = OpenAIRecommender(
+                api_key=api_key,
+                model=model,
+                max_seed_artists=max_seeds_int,
+            )
+        except Exception as exc:  # pragma: no cover - network/config errors
+            self.logger.error("Failed to initialize OpenAI client: %s", exc)
+            self.openai_recommender = None
+
     def format_numbers(self, count: int) -> str:
         if count >= 1_000_000:
             return f"{count / 1_000_000:.1f}M"
@@ -721,6 +1144,9 @@ class DataHandler:
                         "auto_start_delay": self.auto_start_delay,
                         "youtube_api_key": self.youtube_api_key,
                         "similar_artist_batch_size": self.similar_artist_batch_size,
+                        "openai_api_key": self.openai_api_key,
+                        "openai_model": self.openai_model,
+                        "openai_max_seed_artists": self.openai_max_seed_artists,
                     },
                     json_file,
                     indent=4,
@@ -782,6 +1208,9 @@ class DataHandler:
             "auto_start_delay": 60,
             "youtube_api_key": "",
             "similar_artist_batch_size": 10,
+            "openai_api_key": "",
+            "openai_model": "",
+            "openai_max_seed_artists": DEFAULT_MAX_SEED_ARTISTS,
             "sonobarr_superadmin_username": "admin",
             "sonobarr_superadmin_password": "",
             "sonobarr_superadmin_display_name": "Super Admin",
@@ -822,6 +1251,10 @@ class DataHandler:
         self.app_url = self._env("app_url")
         self.last_fm_api_key = self._env("last_fm_api_key")
         self.last_fm_api_secret = self._env("last_fm_api_secret")
+        self.openai_api_key = self._env("openai_api_key")
+        self.openai_model = self._env("openai_model")
+        openai_max_seed = self._env("openai_max_seed_artists")
+        self.openai_max_seed_artists = int(openai_max_seed) if openai_max_seed else ""
 
         auto_start = self._env("auto_start")
         self.auto_start = auto_start.lower() == "true" if auto_start != "" else ""
@@ -867,8 +1300,16 @@ class DataHandler:
             self.similar_artist_batch_size = default_settings["similar_artist_batch_size"]
 
         try:
+            self.openai_max_seed_artists = int(self.openai_max_seed_artists)
+        except (TypeError, ValueError):
+            self.openai_max_seed_artists = default_settings["openai_max_seed_artists"]
+        if self.openai_max_seed_artists <= 0:
+            self.openai_max_seed_artists = default_settings["openai_max_seed_artists"]
+
+        try:
             self.lidarr_api_timeout = float(self.lidarr_api_timeout)
         except (TypeError, ValueError):
             self.lidarr_api_timeout = float(default_settings["lidarr_api_timeout"])
 
+        self._configure_openai_client()
         self.save_config_to_file()

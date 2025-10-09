@@ -63,6 +63,24 @@ def register_socketio_handlers(socketio: SocketIO, data_handler) -> None:
         )
         thread.start()
 
+    @socketio.on("ai_prompt_req")
+    def handle_ai_prompt(payload: Any):
+        if not current_user.is_authenticated:
+            disconnect()
+            return
+        sid = request.sid
+        if isinstance(payload, dict):
+            prompt = payload.get("prompt", "")
+        else:
+            prompt = str(payload or "")
+        thread = threading.Thread(
+            target=data_handler.ai_prompt,
+            args=(sid, prompt),
+            name=f"AIPrompt-{sid}",
+            daemon=True,
+        )
+        thread.start()
+
     @socketio.on("stop_req")
     def handle_stop_req():
         if not current_user.is_authenticated:
@@ -130,8 +148,25 @@ def register_socketio_handlers(socketio: SocketIO, data_handler) -> None:
                 room=request.sid,
             )
             return
-        data_handler.update_settings(payload)
-        data_handler.save_config_to_file()
+        try:
+            data_handler.update_settings(payload)
+            data_handler.save_config_to_file()
+            data_handler.load_settings(request.sid)
+            socketio.emit(
+                "settingsSaved",
+                {"message": "Configuration updated successfully."},
+                room=request.sid,
+            )
+        except Exception as exc:  # pragma: no cover - runtime guard
+            # Ensure exceptions are logged and surfaced to the UI without leaking sensitive details
+            data_handler.logger.exception("Failed to persist settings: %s", exc)
+            socketio.emit(
+                "settingsSaveError",
+                {
+                    "message": "Saving settings failed. Check the server logs for details.",
+                },
+                room=request.sid,
+            )
 
     @socketio.on("preview_req")
     def handle_preview(raw_artist_name: str):

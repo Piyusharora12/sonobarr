@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, Optional
 
 from flask import Flask, current_app
@@ -20,6 +21,8 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         template_folder=str(TEMPLATE_DIR),
     )
     app.config.from_object(config_class)
+
+    _configure_logging(app)
 
     # Core extensions -------------------------------------------------
     db.init_app(app)
@@ -107,5 +110,39 @@ def create_app(config_class: type[Config] = Config) -> Flask:
 
     return app
 
+
+def _configure_logging(app: Flask) -> None:
+    log_level_name = (app.config.get("LOG_LEVEL") or "INFO").upper()
+    log_level = getattr(logging, log_level_name, logging.INFO)
+
+    root_logger = logging.getLogger()
+    if not root_logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s in %(name)s: %(message)s"))
+        root_logger.addHandler(handler)
+    root_logger.setLevel(log_level)
+    for handler in root_logger.handlers:
+        handler.setLevel(log_level)
+
+    gunicorn_logger = logging.getLogger("gunicorn.error")
+    if gunicorn_logger.handlers:
+        app.logger.handlers = gunicorn_logger.handlers
+        for handler in app.logger.handlers:
+            handler.setLevel(log_level)
+    elif not app.logger.handlers:
+        app_handler = logging.StreamHandler()
+        app_handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s in %(name)s: %(message)s"))
+        app_handler.setLevel(log_level)
+        app.logger.addHandler(app_handler)
+
+    app.logger.setLevel(log_level)
+
+    # Ensure our custom namespace follows the same level and doesn't duplicate output
+    sonobarr_logger = logging.getLogger("sonobarr_app")
+    sonobarr_logger.setLevel(log_level)
+    sonobarr_logger.propagate = False
+    logging.getLogger("sonobarr").setLevel(log_level)
+
+    logging.captureWarnings(True)
 
 __all__ = ["create_app", "socketio"]
