@@ -18,6 +18,9 @@ var lidarr_select_all_container = document.getElementById(
 var config_modal = document.getElementById('config-modal');
 var lidarr_sidebar = document.getElementById('lidarr-sidebar');
 
+const START_LABEL = 'Start discovery';
+const STOP_LABEL = 'Stop';
+
 var save_message = document.getElementById('save-message');
 var save_changes_button = document.getElementById('save-changes-button');
 var settings_form = document.getElementById('settings-form');
@@ -322,7 +325,7 @@ function load_lidarr_data(response) {
 	if (response.Running) {
 		start_stop_button.classList.remove('btn-success');
 		start_stop_button.classList.add('btn-warning');
-		start_stop_button.textContent = 'Stop';
+		start_stop_button.textContent = STOP_LABEL;
 		every_check_box.forEach((item) => {
 			item.disabled = true;
 		});
@@ -331,7 +334,7 @@ function load_lidarr_data(response) {
 	} else {
 		start_stop_button.classList.add('btn-success');
 		start_stop_button.classList.remove('btn-warning');
-		start_stop_button.textContent = 'Start';
+		start_stop_button.textContent = START_LABEL;
 		every_check_box.forEach((item) => {
 			item.disabled = false;
 		});
@@ -519,7 +522,7 @@ lidarr_get_artists_button.addEventListener('click', function () {
 
 start_stop_button.addEventListener('click', function () {
 	var running_state =
-		start_stop_button.textContent.trim() === 'Start' ? true : false;
+		start_stop_button.textContent.trim() === START_LABEL ? true : false;
 	if (running_state) {
 		// Reset initial load state and show overlay until first results arrive
 		initialLoadComplete = false;
@@ -530,7 +533,7 @@ start_stop_button.addEventListener('click', function () {
 
 		start_stop_button.classList.remove('btn-success');
 		start_stop_button.classList.add('btn-warning');
-		start_stop_button.textContent = 'Stop';
+		start_stop_button.textContent = STOP_LABEL;
 		var checked_items = Array.from(
 			document.querySelectorAll('input[name="lidarr-item"]:checked')
 		).map((item) => item.value);
@@ -547,7 +550,7 @@ start_stop_button.addEventListener('click', function () {
 
 		start_stop_button.classList.add('btn-success');
 		start_stop_button.classList.remove('btn-warning');
-		start_stop_button.textContent = 'Start';
+		start_stop_button.textContent = START_LABEL;
 		document
 			.querySelectorAll('input[name="lidarr-item"]')
 			.forEach((item) => {

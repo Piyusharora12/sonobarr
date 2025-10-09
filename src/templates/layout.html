@@ -67,15 +67,27 @@
               </button>
               <ul class="dropdown-menu dropdown-menu-end shadow-sm">
                 <li class="dropdown-header text-truncate">{{ current_user.display_name or current_user.username }}</li>
-                <li><a class="dropdown-item" href="{{ url_for('main.profile') }}">Profile</a></li>
+                <li>
+                  <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('main.profile') }}">
+                    <i class="fa-solid fa-id-card"></i>
+                    <span>Profile</span>
+                  </a>
+                </li>
                 {% if current_user.is_admin %}
                 <li>
+                  <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('admin.users') }}">
+                    <i class="fa-solid fa-users-gear"></i>
+                    <span>User management</span>
+                  </a>
+                </li>
+                {% if request.endpoint == 'main.home' %}
+                <li>
                   <button type="button" class="dropdown-item d-flex align-items-center gap-2" id="settings-button" data-bs-toggle="modal" data-bs-target="#config-modal">
-                    <i class="fa fa-gear"></i>
+                    <i class="fa-solid fa-gear"></i>
                     <span>Configuration</span>
                   </button>
                 </li>
-                <li><a class="dropdown-item" href="{{ url_for('admin.users') }}">User management</a></li>
+                {% endif %}
                 {% endif %}
                 <li><hr class="dropdown-divider"></li>
                 <li class="px-3 py-2">
@@ -91,7 +103,12 @@
                   </div>
                 </li>
                 <li><hr class="dropdown-divider"></li>
-                <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">Sign out</a></li>
+                <li>
+                  <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('auth.logout') }}">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span>Sign out</span>
+                  </a>
+                </li>
               </ul>
             </div>
             {% else %}
@@ -134,7 +151,7 @@
             <i class="fa-brands fa-github"></i>
             <span>GitHub</span>
           </a>
-          <span class="text-secondary-emphasis">Brought to you by Dodelidoo Labs</span>
+          <span class="footer-credit">Brought to you by Dodelidoo Labs</span>
         </div>
         <div class="d-flex flex-wrap align-items-center gap-2">
           <span class="status-dot" data-status="{{ update_status_color }}" title="{{ update_status_label }}">

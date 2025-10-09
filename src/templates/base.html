@@ -162,30 +162,13 @@
   <!-- Discovery Sidebar -->
   <div class="offcanvas offcanvas-start discovery-sidebar" tabindex="-1" id="lidarr-sidebar" aria-labelledby="lidarr-sidebar-label">
     <div class="offcanvas-header border-bottom">
-      <div class="d-flex align-items-center gap-3">
-        <img src="{{ url_for('static', filename='lidarr.svg') }}" alt="Logo" class="logo flex-shrink-0">
-        <div>
-          <h2 class="offcanvas-title fs-5 mb-1" id="lidarr-sidebar-label">Discovery console</h2>
-          <p class="text-secondary mb-0 small">Sync Lidarr, queue results, and reach the AI assistant.</p>
-        </div>
+      <div class="d-flex flex-column">
+        <h2 class="offcanvas-title fs-5 mb-1" id="lidarr-sidebar-label">Discovery console</h2>
+        <p class="text-secondary mb-0 small">Stream AI ideas, keep Lidarr in sync, and manage your queue from one place.</p>
       </div>
       <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
     <div class="offcanvas-body d-flex flex-column gap-4">
-      <section class="sidebar-section">
-        <p class="sidebar-section-title text-uppercase">Library sync</p>
-        <div class="d-grid gap-2">
-          <button class="btn btn-primary w-100" id="lidarr-get-artists-button" type="button">
-            <span class="spinner-border spinner-border-sm d-none" id="lidarr-spinner" role="status" aria-hidden="true"></span>
-            Get Lidarr Artists
-          </button>
-          <button class="btn btn-success w-100" id="start-stop-button" type="button">Start</button>
-        </div>
-        <div class="sidebar-status small text-secondary-emphasis mt-3">
-          <span id="lidarr-status"></span>
-        </div>
-      </section>
-
       <section class="sidebar-section">
         <p class="sidebar-section-title text-uppercase">Discovery tools</p>
         <p class="sidebar-section-subtitle small text-secondary mb-3">Kick off an AI-assisted session or top up your queue without leaving the wall.</p>
@@ -194,6 +177,20 @@
             <i class="fa fa-magic me-2"></i>
             AI Assist
           </button>
+        </div>
+      </section>
+
+      <section class="sidebar-section">
+        <p class="sidebar-section-title text-uppercase">Library sync</p>
+        <div class="d-grid gap-2">
+          <button class="btn btn-primary w-100" id="lidarr-get-artists-button" type="button">
+            <span class="spinner-border spinner-border-sm d-none" id="lidarr-spinner" role="status" aria-hidden="true"></span>
+            Get Lidarr Artists
+          </button>
+          <button class="btn btn-success w-100" id="start-stop-button" type="button">Start discovery</button>
+        </div>
+        <div class="sidebar-status small text-secondary-emphasis mt-3">
+          <span id="lidarr-status"></span>
         </div>
       </section>
 

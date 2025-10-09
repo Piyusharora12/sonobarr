@@ -75,6 +75,16 @@ body {
     backdrop-filter: blur(6px);
 }
 
+.app-footer .footer-credit {
+    color: rgba(255, 255, 255, 0.78);
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+[data-bs-theme="dark"] .app-footer .footer-credit {
+    color: rgba(255, 255, 255, 0.68);
+}
+
 .status-dot {
     width: 12px;
     height: 12px;
