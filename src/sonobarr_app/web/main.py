@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from ..extensions import db
@@ -21,8 +21,20 @@ def profile():
     if request.method == "POST":
         display_name = (request.form.get("display_name") or "").strip()
         avatar_url = (request.form.get("avatar_url") or "").strip()
+        lastfm_username = (request.form.get("lastfm_username") or "").strip()
+        listenbrainz_username = (request.form.get("listenbrainz_username") or "").strip()
+        listenbrainz_token_raw = (request.form.get("listenbrainz_token") or "").strip()
+        listenbrainz_token_clear = request.form.get("listenbrainz_token_clear") == "on"
+
         current_user.display_name = display_name or None
         current_user.avatar_url = avatar_url or None
+        current_user.lastfm_username = lastfm_username or None
+        current_user.listenbrainz_username = listenbrainz_username or None
+
+        if listenbrainz_token_clear:
+            current_user.listenbrainz_token = None
+        elif listenbrainz_token_raw:
+            current_user.listenbrainz_token = listenbrainz_token_raw
 
         new_password = request.form.get("new_password", "")
         confirm_password = request.form.get("confirm_password", "")
@@ -50,6 +62,12 @@ def profile():
             flash("Profile updated.", "success")
             if password_changed:
                 flash("Password updated.", "success")
+            data_handler = current_app.extensions.get("data_handler")
+            if data_handler and current_user.id is not None:
+                try:
+                    data_handler.refresh_personal_sources_for_user(int(current_user.id))
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    current_app.logger.error("Failed to refresh personal discovery state: %s", exc)
         return redirect(url_for("main.profile"))
 
     return render_template("profile.html")

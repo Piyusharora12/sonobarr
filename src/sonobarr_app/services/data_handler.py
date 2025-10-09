@@ -20,7 +20,10 @@ from thefuzz import fuzz
 from unidecode import unidecode
 
 from ..config import get_env_value
+from ..models import User
 from .openai_client import DEFAULT_MAX_SEED_ARTISTS, OpenAIRecommender
+from .integrations.lastfm_user import LastFmUserService
+from .integrations.listenbrainz_user import ListenBrainzUserService
 
 
 @dataclass
@@ -92,6 +95,8 @@ class DataHandler:
         self.openai_model = ""
         self.openai_max_seed_artists = DEFAULT_MAX_SEED_ARTISTS
         self.openai_recommender: Optional[OpenAIRecommender] = None
+        self.last_fm_user_service: Optional[LastFmUserService] = None
+        self.listenbrainz_user_service: Optional[ListenBrainzUserService] = None
 
         self.load_environ_or_config_settings()
 
@@ -129,6 +134,96 @@ class DataHandler:
         with self.cache_lock:
             return list(self.cached_cleaned_lidarr_names)
 
+    # Personal discovery helpers -----------------------------------
+    def _resolve_user(self, user_id: Optional[int]) -> Optional[User]:
+        if user_id is None:
+            return None
+        try:
+            return User.query.get(int(user_id))
+        except (TypeError, ValueError):
+            return None
+
+    def emit_personal_sources_state(self, sid: str) -> None:
+        session = self.get_session_if_exists(sid)
+        if session is None:
+            session = self.ensure_session(sid)
+
+        user = self._resolve_user(session.user_id)
+
+        lastfm_service_ready = self.last_fm_user_service is not None
+        lastfm_username = user.lastfm_username if user else None
+        lastfm_enabled = bool(lastfm_service_ready and lastfm_username)
+        if not lastfm_service_ready:
+            lastfm_reason = "Administrator must configure Last.fm API keys in Settings."
+        elif not lastfm_username:
+            lastfm_reason = "Add your Last.fm username in Profile → Listening services."
+        else:
+            lastfm_reason = None
+
+        listenbrainz_username = user.listenbrainz_username if user else None
+        listenbrainz_enabled = bool(listenbrainz_username)
+        if not listenbrainz_username:
+            listenbrainz_reason = "Add your ListenBrainz username in Profile → Listening services."
+        else:
+            listenbrainz_reason = None
+        listenbrainz_has_token = bool(user and user.listenbrainz_token)
+
+        state = {
+            "lastfm": {
+                "enabled": lastfm_enabled,
+                "username": lastfm_username,
+                "reason": lastfm_reason,
+                "configured": lastfm_service_ready,
+            },
+            "listenbrainz": {
+                "enabled": listenbrainz_enabled,
+                "username": listenbrainz_username,
+                "reason": listenbrainz_reason,
+                "requiresToken": bool(listenbrainz_username and not listenbrainz_has_token),
+                "hasToken": listenbrainz_has_token,
+            },
+        }
+
+        self.socketio.emit("personal_sources_state", state, room=sid)
+
+    def broadcast_personal_sources_state(self) -> None:
+        with self.sessions_lock:
+            session_ids = [session.sid for session in self.sessions.values()]
+        for session_id in session_ids:
+            self.emit_personal_sources_state(session_id)
+
+    def refresh_personal_sources_for_user(self, user_id: int) -> None:
+        with self.sessions_lock:
+            session_ids = [session.sid for session in self.sessions.values() if session.user_id == user_id]
+        for session_id in session_ids:
+            self.emit_personal_sources_state(session_id)
+
+    def _emit_personal_error(self, sid: str, source: str, message: str, *, title: Optional[str] = None) -> None:
+        payload = {"source": source, "message": message}
+        self.socketio.emit("user_recs_error", payload, room=sid)
+        self.socketio.emit(
+            "new_toast_msg",
+            {
+                "title": title or "Personal discovery",
+                "message": message,
+            },
+            room=sid,
+        )
+
+    def _dedupe_names(self, names: Sequence[str]) -> List[str]:
+        deduped: List[str] = []
+        seen: set[str] = set()
+        for name in names:
+            cleaned = (name or "").strip()
+            if not cleaned:
+                continue
+            normalized = unidecode(cleaned).lower()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            deduped.append(cleaned)
+        return deduped
+
     # Socket helpers --------------------------------------------------
     def connection(self, sid: str, user_id: Optional[int]) -> None:
         session = self.ensure_session(sid, user_id)
@@ -141,6 +236,7 @@ class DataHandler:
                 "Running": session.running,
             }
             self.socketio.emit("lidarr_sidebar_update", payload, room=sid)
+        self.emit_personal_sources_state(sid)
 
     def side_bar_opened(self, sid: str) -> None:
         session = self.ensure_session(sid)
@@ -156,6 +252,7 @@ class DataHandler:
                 "Running": session.running,
             }
             self.socketio.emit("lidarr_sidebar_update", payload, room=sid)
+        self.emit_personal_sources_state(sid)
 
     # Lidarr interactions ---------------------------------------------
     def get_artists_from_lidarr(self, sid: str, checked: bool = False) -> None:
@@ -368,72 +465,189 @@ class DataHandler:
         self.logger.info("AI prompt succeeded in %.2fs with %d seed artists", elapsed, len(seeds))
 
         session.prepare_for_search()
-        if not session.lidarr_items:
-            session.lidarr_items = self._copy_cached_lidarr_items()
-        if not session.cleaned_lidarr_items:
-            session.cleaned_lidarr_items = self._copy_cached_cleaned_names()
-        session.artists_to_use_in_search = seeds
-        session.ai_seed_artists = list(seeds)
+        success = self._stream_seed_artists(
+            session,
+            sid,
+            seeds,
+            ack_event="ai_prompt_ack",
+            ack_payload={"seeds": seeds},
+            error_event="ai_prompt_error",
+            error_message="We couldn't load those artists from our data sources. Try refining your request.",
+            missing_title="Missing artist data",
+            missing_message="Some AI picks couldn't be fully loaded.",
+            source_log_label="AI",
+        )
+        if not success:
+            return
 
-        self.socketio.emit("ai_prompt_ack", {"seeds": seeds}, room=sid)
-        self.socketio.emit("clear", room=sid)
-        payload = {
-            "Status": "Success",
-            "Data": session.lidarr_items,
-            "Running": session.running,
-        }
-        self.socketio.emit("lidarr_sidebar_update", payload, room=sid)
-
-        existing_names = {unidecode(item["Name"]).lower() for item in session.recommended_artists}
-        missing_names: List[str] = []
-        streamed_any = False
-
-        for payload in self._iter_artist_payloads_from_names(seeds, missing=missing_names):
-            normalized = unidecode(payload["Name"]).lower()
-            if normalized in existing_names:
-                continue
-            session.recommended_artists.append(payload)
-            existing_names.add(normalized)
-            streamed_any = True
-            self.socketio.emit("more_artists_loaded", [payload], room=sid)
-
-        if not streamed_any:
-            self.logger.error("Failed to build artist cards for AI seeds: %s", seeds)
-            self.socketio.emit(
-                "ai_prompt_error",
-                {
-                    "message": "We couldn't load those artists from our data sources. Try refining your request.",
-                },
-                room=sid,
-            )
-            session.running = False
-            self.socketio.emit(
-                "lidarr_sidebar_update",
-                {
-                    "Status": "Success",
-                    "Data": session.lidarr_items,
-                    "Running": session.running,
-                },
-                room=sid,
+    def personal_recommendations(self, sid: str, source: str) -> None:
+        session = self.ensure_session(sid)
+        source_key = (source or "").strip().lower()
+        source_label = "Last.fm" if source_key == "lastfm" else "ListenBrainz" if source_key == "listenbrainz" else None
+        if not source_label:
+            self._emit_personal_error(
+                sid,
+                source_key,
+                "Unknown discovery source requested.",
+                title="Personal discovery",
             )
             return
 
-        if missing_names:
-            self.logger.warning("AI suggested artists not found in Last.fm lookup: %s", ", ".join(missing_names))
+        user = self._resolve_user(session.user_id)
+        if not user:
+            self._emit_personal_error(
+                sid,
+                source_key,
+                "You need to sign in again before requesting personal recommendations.",
+                title=f"{source_label} discovery",
+            )
+            return
+
+        start_time = time.perf_counter()
+        seeds: List[str] = []
+        skipped_existing: List[str] = []
+
+        if source_key == "lastfm":
+            if not self.last_fm_user_service:
+                self._emit_personal_error(
+                    sid,
+                    source_key,
+                    "Administrator must configure a Last.fm API key and secret in Settings before this feature can be used.",
+                    title="Last.fm discovery",
+                )
+                return
+            username = (user.lastfm_username or "").strip()
+            if not username:
+                self._emit_personal_error(
+                    sid,
+                    source_key,
+                    "Add your Last.fm username under Profile → Listening services to use this feature.",
+                    title="Last.fm discovery",
+                )
+                return
+            try:
+                recommendations = self.last_fm_user_service.get_recommended_artists(username, limit=50)
+                if not recommendations:
+                    recommendations = self.last_fm_user_service.get_top_artists(username, limit=50)
+                seeds = [artist.name for artist in recommendations if artist.name]
+            except Exception as exc:  # pragma: no cover - network errors
+                self.logger.error("Failed to load Last.fm recommendations for %s: %s", username, exc)
+                self._emit_personal_error(
+                    sid,
+                    source_key,
+                    "We couldn't reach Last.fm right now. Please try again shortly.",
+                    title="Last.fm discovery",
+                )
+                return
+            username_display = username
+        else:  # ListenBrainz
+            username = (user.listenbrainz_username or "").strip()
+            if not username:
+                self._emit_personal_error(
+                    sid,
+                    source_key,
+                    "Add your ListenBrainz username under Profile → Listening services to use this feature.",
+                    title="ListenBrainz discovery",
+                )
+                return
+            token = (user.listenbrainz_token or "").strip() or None
+            service = self.listenbrainz_user_service or ListenBrainzUserService(logger=self.logger)
+            try:
+                recommendations = service.get_user_discoveries(username, user_token=token, limit=50)
+                if not recommendations:
+                    recommendations = service.get_user_top_artists(username, user_token=token, limit=50)
+                seeds = [artist.name for artist in recommendations if artist.name]
+            except Exception as exc:  # pragma: no cover - network errors
+                self.logger.error("Failed to load ListenBrainz recommendations for %s: %s", username, exc)
+                self._emit_personal_error(
+                    sid,
+                    source_key,
+                    "We couldn't reach ListenBrainz right now. Please try again shortly.",
+                    title="ListenBrainz discovery",
+                )
+                return
+            username_display = username
+
+        elapsed = time.perf_counter() - start_time
+        self.logger.info(
+            "%s personal recommendations fetched for user %s in %.2fs (raw=%d)",
+            source_label,
+            user.username,
+            elapsed,
+            len(seeds),
+        )
+
+        seeds = self._dedupe_names(seeds)
+        if not seeds:
+            self._emit_personal_error(
+                sid,
+                source_key,
+                f"{source_label} didn't return any usable artists for your profile.",
+                title=f"{source_label} discovery",
+            )
+            return
+
+        if not session.cleaned_lidarr_items:
+            session.cleaned_lidarr_items = self._copy_cached_cleaned_names()
+        cleaned_library_names = set(session.cleaned_lidarr_items)
+
+        filtered_seeds: List[str] = []
+        for seed in seeds:
+            normalized_seed = unidecode(seed).lower()
+            if normalized_seed in cleaned_library_names:
+                skipped_existing.append(seed)
+                continue
+            filtered_seeds.append(seed)
+
+        if not filtered_seeds:
+            self.logger.info(
+                "%s personal recommendations matched existing Lidarr artists for user %s", source_label, user.username
+            )
+            self._emit_personal_error(
+                sid,
+                source_key,
+                "All recommended artists are already in your Lidarr library.",
+                title=f"{source_label} discovery",
+            )
+            return
+
+        if skipped_existing:
+            toast_message = (
+                f"{len(skipped_existing)} {source_label} recommendation(s) are already in your Lidarr library."
+                if len(skipped_existing) > 1
+                else f"{skipped_existing[0]} is already in your Lidarr library."
+            )
             self.socketio.emit(
                 "new_toast_msg",
                 {
-                    "title": "Missing artist data",
-                    "message": "Some AI picks couldn't be fully loaded.",
+                    "title": "Skipping known artists",
+                    "message": toast_message,
                 },
                 room=sid,
             )
 
-        self.prepare_similar_artist_candidates(session)
-        has_more = bool(session.similar_artist_candidates)
-        session.initial_batch_sent = True
-        session.running = False
-        self.socketio.emit("initial_load_complete", {"hasMore": has_more}, room=sid)
+        session.prepare_for_search()
+        success = self._stream_seed_artists(
+            session,
+            sid,
+            filtered_seeds,
+            ack_event="user_recs_ack",
+            ack_payload={
+                "source": source_key,
+                "username": username_display,
+                "seeds": filtered_seeds,
+                "skipped": skipped_existing,
+            },
+            error_event="user_recs_error",
+            error_message=f"We couldn't load personalised {source_label} picks right now. Please try again later.",
+            missing_title=f"{source_label} data",
+            missing_message=f"Some {source_label} picks couldn't be fully loaded.",
+            source_log_label=source_label,
+        )
+        if not success:
+            return
+
+        self.emit_personal_sources_state(sid)
 
         self.socketio.emit(
             "lidarr_sidebar_update",
@@ -848,6 +1062,9 @@ class DataHandler:
                 )
 
             self._configure_openai_client()
+            self._configure_listening_services()
+            self.save_config_to_file()
+            self.broadcast_personal_sources_state()
         except Exception as exc:
             self.logger.error(f"Failed to update settings: {exc}")
 
@@ -1087,6 +1304,90 @@ class DataHandler:
             elif missing is not None:
                 missing.append(raw_name)
 
+    def _stream_seed_artists(
+        self,
+        session: SessionState,
+        sid: str,
+        seeds: Sequence[str],
+        *,
+        ack_event: str,
+        ack_payload: Dict[str, Any],
+        error_event: str,
+        error_message: str,
+        missing_title: str,
+        missing_message: str,
+        source_log_label: str,
+    ) -> bool:
+        if not session.lidarr_items:
+            session.lidarr_items = self._copy_cached_lidarr_items()
+        if not session.cleaned_lidarr_items:
+            session.cleaned_lidarr_items = self._copy_cached_cleaned_names()
+
+        session.artists_to_use_in_search = list(seeds)
+        session.ai_seed_artists = list(seeds)
+
+        self.socketio.emit(ack_event, ack_payload, room=sid)
+        self.socketio.emit("clear", room=sid)
+        self.socketio.emit(
+            "lidarr_sidebar_update",
+            {
+                "Status": "Success",
+                "Data": session.lidarr_items,
+                "Running": session.running,
+            },
+            room=sid,
+        )
+
+        existing_names = {unidecode(item["Name"]).lower() for item in session.recommended_artists}
+        missing_names: List[str] = []
+        streamed_any = False
+
+        for payload in self._iter_artist_payloads_from_names(seeds, missing=missing_names):
+            normalized = unidecode(payload["Name"]).lower()
+            if normalized in existing_names:
+                continue
+            session.recommended_artists.append(payload)
+            existing_names.add(normalized)
+            streamed_any = True
+            self.socketio.emit("more_artists_loaded", [payload], room=sid)
+
+        if not streamed_any:
+            self.logger.error("Failed to build artist cards for %s seeds: %s", source_log_label, list(seeds))
+            self.socketio.emit(error_event, {"message": error_message}, room=sid)
+            session.running = False
+            self.socketio.emit(
+                "lidarr_sidebar_update",
+                {
+                    "Status": "Success",
+                    "Data": session.lidarr_items,
+                    "Running": session.running,
+                },
+                room=sid,
+            )
+            return False
+
+        if missing_names:
+            self.logger.warning(
+                "%s seeds missing metadata: %s",
+                source_log_label,
+                ", ".join(missing_names),
+            )
+            self.socketio.emit(
+                "new_toast_msg",
+                {
+                    "title": missing_title,
+                    "message": missing_message,
+                },
+                room=sid,
+            )
+
+        self.prepare_similar_artist_candidates(session)
+        has_more = bool(session.similar_artist_candidates)
+        session.initial_batch_sent = True
+        session.running = False
+        self.socketio.emit("initial_load_complete", {"hasMore": has_more}, room=sid)
+        return True
+
     def _configure_openai_client(self) -> None:
         api_key = (self.openai_api_key or "").strip()
         if not api_key:
@@ -1112,6 +1413,17 @@ class DataHandler:
         except Exception as exc:  # pragma: no cover - network/config errors
             self.logger.error("Failed to initialize OpenAI client: %s", exc)
             self.openai_recommender = None
+
+    def _configure_listening_services(self) -> None:
+        lastfm_key = (getattr(self, "last_fm_api_key", "") or "").strip()
+        lastfm_secret = (getattr(self, "last_fm_api_secret", "") or "").strip()
+        if lastfm_key and lastfm_secret:
+            self.last_fm_user_service = LastFmUserService(lastfm_key, lastfm_secret)
+        else:
+            self.last_fm_user_service = None
+
+        # ListenBrainz endpoints support anonymous access; still instantiate for shared logging.
+        self.listenbrainz_user_service = ListenBrainzUserService(logger=self.logger)
 
     def format_numbers(self, count: int) -> str:
         if count >= 1_000_000:
@@ -1312,4 +1624,5 @@ class DataHandler:
             self.lidarr_api_timeout = float(default_settings["lidarr_api_timeout"])
 
         self._configure_openai_client()
+        self._configure_listening_services()
         self.save_config_to_file()

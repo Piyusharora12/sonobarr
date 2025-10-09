@@ -171,12 +171,30 @@
     <div class="offcanvas-body d-flex flex-column gap-4">
       <section class="sidebar-section">
         <p class="sidebar-section-title text-uppercase">Discovery tools</p>
-        <p class="sidebar-section-subtitle small text-secondary mb-3">Kick off an AI-assisted session or top up your queue without leaving the wall.</p>
-        <div class="d-grid gap-2">
+        <p class="sidebar-section-subtitle small text-secondary mb-3">Kick off an AI-assisted session or tap into your own listening history without leaving the wall.</p>
+        <div class="d-grid gap-2 mb-3">
           <button class="btn btn-outline-primary w-100" id="ai-assist-button" type="button" data-bs-toggle="modal" data-bs-target="#ai-helper-modal">
             <i class="fa fa-magic me-2"></i>
             AI Assist
           </button>
+        </div>
+        <div class="personal-discovery-controls d-flex flex-column gap-3 mt-3">
+          <div class="d-flex flex-column gap-1">
+            <button class="btn btn-outline-danger w-100 d-flex align-items-center justify-content-center gap-2" id="personal-lastfm-button" type="button" disabled>
+              <span class="spinner-border spinner-border-sm d-none" id="personal-lastfm-spinner" role="status" aria-hidden="true"></span>
+              <i class="fa-brands fa-lastfm"></i>
+              <span>Last.fm for me</span>
+            </button>
+            <div class="small text-secondary d-none" id="personal-lastfm-hint"></div>
+          </div>
+          <div class="d-flex flex-column gap-1">
+            <button class="btn btn-outline-success w-100 d-flex align-items-center justify-content-center gap-2" id="personal-listenbrainz-button" type="button" disabled>
+              <span class="spinner-border spinner-border-sm d-none" id="personal-listenbrainz-spinner" role="status" aria-hidden="true"></span>
+              <i class="fa-solid fa-waveform-lines"></i>
+              <span>ListenBrainz for me</span>
+            </button>
+            <div class="small text-secondary d-none" id="personal-listenbrainz-hint"></div>
+          </div>
         </div>
       </section>
 

@@ -81,6 +81,31 @@ def register_socketio_handlers(socketio: SocketIO, data_handler) -> None:
         )
         thread.start()
 
+    @socketio.on("personal_sources_poll")
+    def handle_personal_sources_poll():
+        if not current_user.is_authenticated:
+            disconnect()
+            return
+        data_handler.emit_personal_sources_state(request.sid)
+
+    @socketio.on("user_recs_req")
+    def handle_user_recs(payload: Any):
+        if not current_user.is_authenticated:
+            disconnect()
+            return
+        sid = request.sid
+        if isinstance(payload, dict):
+            source = payload.get("source", "")
+        else:
+            source = str(payload or "")
+        thread = threading.Thread(
+            target=data_handler.personal_recommendations,
+            args=(sid, source),
+            name=f"PersonalRecs-{sid}",
+            daemon=True,
+        )
+        thread.start()
+
     @socketio.on("stop_req")
     def handle_stop_req():
         if not current_user.is_authenticated:
