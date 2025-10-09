@@ -276,6 +276,7 @@ class DataHandler:
 
         with self.cache_lock:
             library_artists = list(self.cached_lidarr_names)
+            cleaned_library_names = set(self.cached_cleaned_lidarr_names)
 
         prompt_preview = prompt_text if len(prompt_text) <= 120 else f"{prompt_text[:117]}..."
         model_name = getattr(self.openai_recommender, "model", "unknown")
@@ -317,6 +318,51 @@ class DataHandler:
                 room=sid,
             )
             return
+
+        filtered_seeds: List[str] = []
+        skipped_existing: List[str] = []
+        for seed in seeds:
+            normalized_seed = unidecode(seed).lower()
+            if normalized_seed in cleaned_library_names:
+                skipped_existing.append(seed)
+                continue
+            filtered_seeds.append(seed)
+
+        if not filtered_seeds:
+            elapsed = time.perf_counter() - start_time
+            self.logger.info(
+                "AI prompt completed in %.2fs but every seed matched an existing Lidarr artist", elapsed
+            )
+            self.socketio.emit(
+                "ai_prompt_error",
+                {
+                    "message": "All suggested artists are already in your Lidarr library. Try a different prompt.",
+                },
+                room=sid,
+            )
+            return
+
+        if skipped_existing:
+            self.logger.info(
+                "Filtered %d AI seed(s) already present in Lidarr: %s",
+                len(skipped_existing),
+                ", ".join(skipped_existing),
+            )
+            toast_message = (
+                f"{len(skipped_existing)} AI suggestion(s) are already in your Lidarr library."
+                if len(skipped_existing) > 1
+                else f"{skipped_existing[0]} is already in your Lidarr library."
+            )
+            self.socketio.emit(
+                "new_toast_msg",
+                {
+                    "title": "Skipping known artists",
+                    "message": toast_message,
+                },
+                room=sid,
+            )
+
+        seeds = filtered_seeds
 
         elapsed = time.perf_counter() - start_time
         self.logger.info("AI prompt succeeded in %.2fs with %d seed artists", elapsed, len(seeds))

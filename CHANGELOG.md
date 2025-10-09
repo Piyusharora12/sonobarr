@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Settings JSON now stores OpenAI configuration metadata.
 - `.sample-env` enumerates all available environment keys with sensible defaults.
+- AI-generated seed artists now skip entries already present in the Lidarr library before streaming results.
 
 ## [0.5.0] - 2025-10-08
 ### Added
