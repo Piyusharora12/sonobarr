@@ -220,23 +220,23 @@
             <div class="status-indicator">
               <div class="led"></div>
             </div>
-            <div class="artist-img-container mb-3">
+            <div class="artist-img-container mb-2">
               <img src="" class="card-img-top" alt="">
             </div>
-            <div class="card-body d-flex flex-column gap-3">
-              <div>
-                <h5 class="card-title mb-1"></h5>
-                <p class="card-text similarity artist-similarity text-uppercase small fw-semibold d-none"></p>
-                <p class="card-text genre text-secondary mb-0"></p>
+            <div class="card-body d-flex flex-column gap-2 p-3">
+              <div class="d-flex flex-column gap-1">
+                <h5 class="card-title mb-0 fs-5"></h5>
+                <p class="card-text similarity artist-similarity text-uppercase small fw-semibold text-primary d-none"></p>
+                <p class="card-text genre text-body-secondary mb-0 small"></p>
               </div>
-              <div class="artist-actions d-grid gap-2">
-                <button class="btn btn-primary add-to-lidarr-btn w-100">Add to Lidarr</button>
-                <div class="artist-secondary-actions d-flex gap-2">
-                  <button class="btn btn-outline-primary get-preview-btn flex-fill">Bio</button>
-                  <button class="btn btn-outline-secondary listen-sample-btn flex-fill">Listen</button>
+              <div class="artist-actions d-flex flex-column gap-2 mt-auto">
+                <button class="btn btn-primary btn-sm rounded-pill add-to-lidarr-btn w-100">Add to Lidarr</button>
+                <div class="d-flex gap-2">
+                  <button class="btn btn-outline-primary btn-sm rounded-pill get-preview-btn flex-fill">Bio</button>
+                  <button class="btn btn-outline-secondary btn-sm rounded-pill listen-sample-btn flex-fill">Listen</button>
                 </div>
               </div>
-              <div class="artist-meta text-muted small d-flex justify-content-between">
+              <div class="artist-meta text-body-secondary small d-flex justify-content-between pt-2 border-top border-secondary-subtle">
                 <span class="followers"></span>
                 <span class="popularity text-end"></span>
               </div>

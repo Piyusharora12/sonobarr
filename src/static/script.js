@@ -146,12 +146,36 @@ function render_biography_html(biography) {
 	}
 	var containsHtml = /<\/?[a-z][\s\S]*>/i.test(trimmed);
 	if (containsHtml) {
+		var sanitizedHtml;
 		if (typeof DOMPurify !== 'undefined') {
-			return DOMPurify.sanitize(trimmed, {
+			sanitizedHtml = DOMPurify.sanitize(trimmed, {
 				USE_PROFILES: { html: true },
 			});
+		} else {
+			sanitizedHtml = escape_html(trimmed);
 		}
-		return escape_html(trimmed);
+		if (
+			sanitizedHtml &&
+			!/<p[\s>]/i.test(sanitizedHtml) &&
+			/\n/.test(sanitizedHtml)
+		) {
+			var htmlBlocks = sanitizedHtml
+				.split(/\n{2,}/)
+				.map(function (block) {
+					return block.trim();
+				})
+				.filter(function (block) {
+					return block.length > 0;
+				})
+				.map(function (block) {
+					return '<p>' + block.replace(/\n/g, '<br>') + '</p>';
+				})
+				.join('');
+			if (htmlBlocks) {
+				return htmlBlocks;
+			}
+		}
+		return sanitizedHtml;
 	}
 	var paragraphs = trimmed
 		.split(/\n{2,}/)
