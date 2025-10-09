@@ -10,7 +10,7 @@ from flask_socketio import SocketIO, disconnect
 
 def register_socketio_handlers(socketio: SocketIO, data_handler) -> None:
     @socketio.on("connect")
-    def handle_connect():
+    def handle_connect(auth=None):
         if not current_user.is_authenticated:
             return False
         sid = request.sid

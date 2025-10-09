@@ -4,6 +4,8 @@ import logging
 from typing import Any, Dict, Optional
 
 from flask import Flask, current_app
+from sqlalchemy import inspect, text
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from .bootstrap import bootstrap_super_admin
 from .config import Config, STATIC_DIR, TEMPLATE_DIR
@@ -43,6 +45,12 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         try:
             return User.query.get(int(user_id))
         except (TypeError, ValueError):
+            return None
+        except (OperationalError, ProgrammingError) as exc:
+            current_app.logger.warning(
+                "Database schema not ready when loading user %s: %s", user_id, exc
+            )
+            db.session.rollback()
             return None
 
     # Services --------------------------------------------------------
@@ -106,6 +114,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     # Database initialisation ----------------------------------------
     with app.app_context():
         db.create_all()
+        _ensure_user_profile_columns(app.logger)
         bootstrap_super_admin(app.logger, data_handler)
 
     return app
@@ -146,3 +155,33 @@ def _configure_logging(app: Flask) -> None:
     logging.captureWarnings(True)
 
 __all__ = ["create_app", "socketio"]
+
+
+def _ensure_user_profile_columns(logger: logging.Logger) -> None:
+    """Backfill the user listening columns if migrations have not run yet."""
+
+    try:
+        inspector = inspect(db.engine)
+        user_columns = {column["name"] for column in inspector.get_columns("users")}
+    except (OperationalError, ProgrammingError) as exc:
+        logger.warning("Unable to inspect users table for backfill: %s", exc)
+        db.session.rollback()
+        return
+
+    alter_statements: list[tuple[str, str]] = []
+    if "lastfm_username" not in user_columns:
+        alter_statements.append(("lastfm_username", "ALTER TABLE users ADD COLUMN lastfm_username VARCHAR(120)"))
+    if "listenbrainz_username" not in user_columns:
+        alter_statements.append(("listenbrainz_username", "ALTER TABLE users ADD COLUMN listenbrainz_username VARCHAR(120)"))
+    if "listenbrainz_token" not in user_columns:
+        alter_statements.append(("listenbrainz_token", "ALTER TABLE users ADD COLUMN listenbrainz_token VARCHAR(255)"))
+
+    for column_name, statement in alter_statements:
+        try:
+            db.session.execute(text(statement))
+            db.session.commit()
+            logger.info("Added missing column '%s' via automatic backfill", column_name)
+        except (OperationalError, ProgrammingError) as exc:
+            logger.warning("Failed to apply backfill for column '%s': %s", column_name, exc)
+            db.session.rollback()
+            # Keep attempting remaining columns; missing ones will be caught again on next start.

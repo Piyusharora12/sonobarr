@@ -2,12 +2,19 @@ from __future__ import annotations
 
 import secrets
 
+from sqlalchemy.exc import OperationalError, ProgrammingError
+
 from .extensions import db
 from .models import User
 
 
 def bootstrap_super_admin(logger, data_handler) -> None:
-    admin_count = User.query.filter_by(is_admin=True).count()
+    try:
+        admin_count = User.query.filter_by(is_admin=True).count()
+    except (OperationalError, ProgrammingError) as exc:
+        logger.warning("Database not ready; skipping super-admin bootstrap: %s", exc)
+        db.session.rollback()
+        return
     reset_flag = data_handler.superadmin_reset_flag
     if admin_count > 0 and not reset_flag:
         return
@@ -38,7 +45,12 @@ def bootstrap_super_admin(logger, data_handler) -> None:
         db.session.add(admin)
         action = "created"
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except (OperationalError, ProgrammingError) as exc:
+        logger.warning("Failed to commit super-admin bootstrap changes: %s", exc)
+        db.session.rollback()
+        return
 
     if generated_password:
         logger.warning(

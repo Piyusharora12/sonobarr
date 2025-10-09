@@ -19,6 +19,7 @@ APP_DIR=/sonobarr
 SRC_DIR="${APP_DIR}/src"
 CONFIG_DIR="${APP_DIR}/config"
 MIGRATIONS_DIR=${MIGRATIONS_DIR:-${CONFIG_DIR}/migrations}
+BUNDLED_MIGRATIONS_DIR=${APP_DIR}/migrations
 
 export PYTHONPATH=${PYTHONPATH:-${SRC_DIR}}
 export FLASK_APP=${FLASK_APP:-src.Sonobarr}
@@ -33,7 +34,19 @@ echo "-----------------"
 
 # Create the required directories with the correct permissions
 echo "Setting up directories.."
-mkdir -p "${CONFIG_DIR}"
+mkdir -p "${CONFIG_DIR}" "${MIGRATIONS_DIR}"
+
+if [ -d "${BUNDLED_MIGRATIONS_DIR}" ]; then
+   if [ "${BUNDLED_MIGRATIONS_DIR}" != "${MIGRATIONS_DIR}" ]; then
+      echo "Syncing bundled migrations into ${MIGRATIONS_DIR}..."
+      cp -R "${BUNDLED_MIGRATIONS_DIR}/." "${MIGRATIONS_DIR}/"
+   else
+      echo "Bundled migrations already reside at ${MIGRATIONS_DIR}; skipping sync."
+   fi
+else
+   echo "Warning: bundled migrations directory missing at ${BUNDLED_MIGRATIONS_DIR}"
+fi
+
 chown -R ${PUID}:${PGID} "${APP_DIR}"
 
 if [ -d "${MIGRATIONS_DIR}" ] && [ -f "${MIGRATIONS_DIR}/env.py" ]; then

@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Now copy the rest of your code
 COPY src/ /sonobarr/src/
+COPY migrations/ /sonobarr/migrations/
 COPY gunicorn_config.py /sonobarr/
 COPY init.sh /sonobarr/
 
