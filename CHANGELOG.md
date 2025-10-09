@@ -5,15 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.6.0] - 2025-10-09
 ### Added
 - OpenAI-powered "AI Assist" modal that turns natural language prompts into fresh discovery sessions.
-- OpenAI API key/model settings persisted alongside other admin configuration.
 - Settings modal now surfaces every persisted configuration option, grouped by integration.
 
 ### Changed
-- Settings JSON now stores OpenAI configuration metadata.
-- `.sample-env` enumerates all available environment keys with sensible defaults.
-- AI-generated seed artists now skip entries already present in the Lidarr library before streaming results.
+- `.env` enumerates all available environment keys with sensible defaults.
+- Discovery sidebar, header, and card layout refreshed for a nicer experience.
+
+### Fixed
+- Biography modal sanitisation now retains Last.fm paragraph breaks and inline links for improved readability.
 
 ## [0.5.0] - 2025-10-08
 ### Added

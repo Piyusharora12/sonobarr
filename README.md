@@ -34,12 +34,13 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
 - 🔌 **Lidarr integration** – fetch and cache your monitored artists automatically.
 - 🔍 **Smart discovery** – query Last.fm for related artists, with dedupe and similarity scoring.
 - 🤖 **AI assistant** – describe moods, genres or artists in plain English and let OpenAI pick seed artists for you.
-- 🎧 **Preview & bio panels** – jump straight into YouTube or iTunes previews and read artist bios.
+- 🎧 **Preview & bio panels** – jump straight into YouTube or iTunes previews and read Last.fm bios with preserved paragraph formatting.
+- 🧩 **Compact artist cards** – square artwork, button controls, and a top-right status.
 - ⚡️ **Real-time UX** – Socket.IO pushes new cards, status updates, and toast notifications instantly.
 - 👥 **Role-based access** – built-in authentication plus an admin-only settings & user management area.
 - 🔒 **Secure forms** – CSRF protection and stricter cookie settings keep sessions and admin actions safe.
 - 🔔 **Update awareness** – footer badge compares your container version with the latest GitHub release.
--- 🧱 **Zero touch migrations** – database schema managed byFlask-Migrate and applied automatically on boot.
+- 🧱 **Zero touch migrations** – database schema managed by Flask-Migrate and applied automatically on boot.
 - 🐳 **Docker-first deployment** – official image on GHCR, mountable config volume, healthy defaults.
 
 ---
@@ -175,14 +176,14 @@ Currently relying on manual testing. Contributions adding pytest coverage, espec
 1. **Sign in** with the bootstrap admin credentials. Create additional users from the **User management** page (top-right avatar → *User management*).
 2. **Configure integrations** via the **Settings** button (top bar gear icon). Provide your Lidarr endpoint/key and optional YouTube key (can both be set in .env or UI)
 3. **Fetch Lidarr artists** with the left sidebar button. Select the artists you want to base discovery on.
-4. Hit **Start**. Sonobarr queues batches of similar artists and streams them to the grid. Cards show genre, popularity, listeners, and a color-coded status LED as well as similarity (according to Last.fm)
-5. Use **Bio** and **Listen** buttons for deeper context. Click **Add to Lidarr** to push the candidate back into your library; feedback appears on the card immediately.
+4. Hit **Start**. Sonobarr queues batches of similar artists and streams them to the grid. Cards show genre, popularity, listeners, similarity (from Last.fm), plus a status LED dot in the image corner.
+5. Use **Bio** and **Listen** buttons for deeper context - the bio modal keeps Last.fm paragraph spacing intact. Click **Add to Lidarr** to push the candidate back into your library; feedback appears on the card immediately.
 6. Stop or resume discovery anytime. Toast notifications keep everyone informed when conflicts or errors occur.
 
 ### AI-powered prompts
 
 - Click the **AI Assist** button on the top bar to open a prompt modal.
-- Describe the mood, genres, or examples you're craving (e.g. “dreamy synth-pop like M83 but calmer”).
+- Describe the mood, genres, or examples you're craving (e.g. "dreamy synth-pop like M83 but calmer").
 - Provide an OpenAI API key through the settings modal (or `.env`) to unlock the feature; without a key the assistant stays disabled.
 - The assistant picks a handful of seed artists, kicks off a discovery session automatically, and keeps streaming cards just like a normal Lidarr-driven search.
 
