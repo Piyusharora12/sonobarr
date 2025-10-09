@@ -8,9 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - OpenAI-powered "AI Assist" modal that turns natural language prompts into fresh discovery sessions.
 - OpenAI API key/model settings persisted alongside other admin configuration.
+- Settings modal now surfaces every persisted configuration option, grouped by integration.
 
 ### Changed
 - Settings JSON now stores OpenAI configuration metadata.
+- `.sample-env` enumerates all available environment keys with sensible defaults.
 
 ## [0.5.0] - 2025-10-08
 ### Added

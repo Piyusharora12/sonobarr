@@ -48,30 +48,110 @@
           <div id="save-message" style="display: none;" class="alert alert-success mt-3">
             Settings saved successfully.
           </div>
+
+          <h6 class="text-muted mt-2">Lidarr connection</h6>
           <div class="form-group-modal">
-            <label for="lidarr-address">Lidarr Address:</label>
-            <input type="text" class="form-control" id="lidarr-address" placeholder="Enter Lidarr Address">
+            <label for="lidarr-address">Lidarr Address</label>
+            <input type="text" class="form-control" id="lidarr-address" placeholder="http://192.168.1.1:8686">
           </div>
           <div class="form-group-modal my-3">
-            <label for="lidarr-api-key">Lidarr API Key:</label>
+            <label for="lidarr-api-key">Lidarr API Key</label>
             <input type="text" class="form-control" id="lidarr-api-key" placeholder="Enter Lidarr API Key">
           </div>
           <div class="form-group-modal my-3">
-            <label for="root-folder-path">Lidarr Root Folder Path:</label>
-            <input type="text" class="form-control" id="root-folder-path" placeholder="Enter Lidarr Root Folder Path">
+            <label for="root-folder-path">Root Folder Path</label>
+            <input type="text" class="form-control" id="root-folder-path" placeholder="/data/media/music/">
           </div>
-	  <div class="form-group-modal my-3">
-            <label for="youtube-api-key">YouTube API Key:</label>
-            <input type="text" class="form-control" id="youtube-api-key" placeholder="Enter YouTUbe API Key">
+          <div class="row g-3">
+            <div class="col">
+              <div class="form-group-modal">
+                <label for="quality-profile-id">Quality Profile ID</label>
+                <input type="number" class="form-control" id="quality-profile-id" min="1">
+              </div>
+            </div>
+            <div class="col">
+              <div class="form-group-modal">
+                <label for="metadata-profile-id">Metadata Profile ID</label>
+                <input type="number" class="form-control" id="metadata-profile-id" min="1">
+              </div>
+            </div>
           </div>
           <div class="form-group-modal my-3">
-            <label for="openai-api-key">OpenAI API Key:</label>
-            <input type="text" class="form-control" id="openai-api-key" placeholder="Enter OpenAI API Key">
-            <small class="form-text text-muted">Leave blank to disable AI-powered discovery.</small>
+            <label for="lidarr-api-timeout">Lidarr API Timeout (seconds)</label>
+            <input type="number" class="form-control" id="lidarr-api-timeout" min="1" step="1">
+            <small class="form-text text-muted">How long Sonobarr waits for Lidarr before giving up.</small>
+          </div>
+          <div class="form-check form-switch my-2">
+            <input class="form-check-input" type="checkbox" id="fallback-to-top-result">
+            <label class="form-check-label" for="fallback-to-top-result">Fallback to Lidarr's top search result when similarity is low</label>
+          </div>
+          <div class="form-check form-switch my-2">
+            <input class="form-check-input" type="checkbox" id="search-for-missing-albums">
+            <label class="form-check-label" for="search-for-missing-albums">Trigger Lidarr's "search for missing" flag on add</label>
+          </div>
+          <div class="form-check form-switch my-2">
+            <input class="form-check-input" type="checkbox" id="dry-run-adding-to-lidarr">
+            <label class="form-check-label" for="dry-run-adding-to-lidarr">Dry run additions (don't call Lidarr)</label>
+          </div>
+
+          <hr class="my-4">
+
+          <h6 class="text-muted">Discovery behaviour</h6>
+          <div class="row g-3">
+            <div class="col">
+              <div class="form-group-modal">
+                <label for="similar-artist-batch-size">Batch Size</label>
+                <input type="number" class="form-control" id="similar-artist-batch-size" min="1" step="1">
+                <small class="form-text text-muted">Cards streamed per batch.</small>
+              </div>
+            </div>
+            <div class="col">
+              <div class="form-group-modal">
+                <label for="auto-start-delay">Auto-start Delay (seconds)</label>
+                <input type="number" class="form-control" id="auto-start-delay" min="0" step="1">
+              </div>
+            </div>
+          </div>
+          <div class="form-check form-switch my-2">
+            <input class="form-check-input" type="checkbox" id="auto-start">
+            <label class="form-check-label" for="auto-start">Auto-start discovery when the page loads</label>
+          </div>
+
+          <hr class="my-4">
+
+          <h6 class="text-muted">External APIs</h6>
+          <div class="form-group-modal">
+            <label for="last-fm-api-key">Last.fm API Key</label>
+            <input type="text" class="form-control" id="last-fm-api-key" placeholder="Enter Last.fm API Key">
           </div>
           <div class="form-group-modal my-3">
-            <label for="openai-model">OpenAI Model (optional):</label>
-            <input type="text" class="form-control" id="openai-model" placeholder="e.g., gpt-4o-mini">
+            <label for="last-fm-api-secret">Last.fm API Secret</label>
+            <input type="text" class="form-control" id="last-fm-api-secret" placeholder="Enter Last.fm API Secret">
+          </div>
+          <div class="form-group-modal my-3">
+            <label for="youtube-api-key">YouTube API Key</label>
+            <input type="text" class="form-control" id="youtube-api-key" placeholder="Enter YouTube API Key">
+            <small class="form-text text-muted">YouTube powers the preview player. Leave blank to fall back to iTunes samples.</small>
+          </div>
+          <div class="form-group-modal my-3">
+            <label for="openai-api-key">OpenAI API Key</label>
+            <input type="text" class="form-control" id="openai-api-key" placeholder="sk-...">
+            <small class="form-text text-muted">Leave blank to disable the AI Assist modal.</small>
+          </div>
+          <div class="row g-3">
+            <div class="col">
+              <div class="form-group-modal">
+                <label for="openai-model">OpenAI Model</label>
+                <input type="text" class="form-control" id="openai-model" placeholder="e.g., gpt-4o-mini">
+              </div>
+            </div>
+            <div class="col">
+              <div class="form-group-modal">
+                <label for="openai-max-seed-artists">Max Seed Artists</label>
+                <input type="number" class="form-control" id="openai-max-seed-artists" min="1" step="1">
+              </div>
+            </div>
+          </div>
           </div>
         </div>
         <div class="modal-footer">

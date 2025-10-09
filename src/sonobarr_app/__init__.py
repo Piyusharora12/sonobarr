@@ -137,7 +137,10 @@ def _configure_logging(app: Flask) -> None:
 
     app.logger.setLevel(log_level)
 
-    # Ensure our custom namespace follows the same level
+    # Ensure our custom namespace follows the same level and doesn't duplicate output
+    sonobarr_logger = logging.getLogger("sonobarr_app")
+    sonobarr_logger.setLevel(log_level)
+    sonobarr_logger.propagate = False
     logging.getLogger("sonobarr").setLevel(log_level)
 
     logging.captureWarnings(True)

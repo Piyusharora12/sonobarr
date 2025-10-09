@@ -665,9 +665,23 @@ class DataHandler:
                 "lidarr_api_key": self.lidarr_api_key,
                 "root_folder_path": self.root_folder_path,
                 "youtube_api_key": self.youtube_api_key,
+                "quality_profile_id": self.quality_profile_id,
+                "metadata_profile_id": self.metadata_profile_id,
+                "lidarr_api_timeout": self.lidarr_api_timeout,
+                "fallback_to_top_result": self.fallback_to_top_result,
+                "search_for_missing_albums": self.search_for_missing_albums,
+                "dry_run_adding_to_lidarr": self.dry_run_adding_to_lidarr,
+                "last_fm_api_key": self.last_fm_api_key,
+                "last_fm_api_secret": self.last_fm_api_secret,
+                "auto_start": self.auto_start,
+                "auto_start_delay": self.auto_start_delay,
                 "openai_api_key": self.openai_api_key,
                 "openai_model": self.openai_model,
+                "openai_max_seed_artists": self.openai_max_seed_artists,
                 "similar_artist_batch_size": self.similar_artist_batch_size,
+                "app_name": self.app_name,
+                "app_rev": self.app_rev,
+                "app_url": self.app_url,
             }
             self.socketio.emit("settingsLoaded", data, room=sid)
         except Exception as exc:
@@ -675,20 +689,118 @@ class DataHandler:
 
     def update_settings(self, data: dict) -> None:
         try:
-            self.lidarr_address = data["lidarr_address"].strip()
-            self.lidarr_api_key = data["lidarr_api_key"].strip()
-            self.root_folder_path = data["root_folder_path"].strip()
-            self.youtube_api_key = data.get("youtube_api_key", "").strip()
-            self.openai_api_key = data.get("openai_api_key", "").strip()
-            self.openai_model = data.get("openai_model", "").strip()
-            batch_size = data.get("similar_artist_batch_size")
-            if batch_size is not None:
+            def _clean_str(value: Any) -> str:
+                if value is None:
+                    return ""
+                return str(value).strip()
+
+            def _coerce_bool(value: Any, current: bool) -> bool:
+                if isinstance(value, bool):
+                    return value
+                if value is None:
+                    return current
+                if isinstance(value, (int, float)):
+                    return value != 0
+                value_str = str(value).strip().lower()
+                if value_str == "":
+                    return False
+                return value_str in {"1", "true", "yes", "on"}
+
+            def _coerce_int(value: Any, current: int, minimum: int | None = None) -> int:
+                if value in (None, ""):
+                    return current
                 try:
-                    batch_value = int(batch_size)
+                    parsed = int(value)
                 except (TypeError, ValueError):
-                    batch_value = self.similar_artist_batch_size
-                if batch_value > 0:
-                    self.similar_artist_batch_size = batch_value
+                    return current
+                if minimum is not None and parsed < minimum:
+                    return minimum
+                return parsed
+
+            def _coerce_float(value: Any, current: float, minimum: float | None = None) -> float:
+                if value in (None, ""):
+                    return current
+                try:
+                    parsed = float(value)
+                except (TypeError, ValueError):
+                    return current
+                if minimum is not None and parsed < minimum:
+                    return minimum
+                return parsed
+
+            if "lidarr_address" in data:
+                self.lidarr_address = _clean_str(data.get("lidarr_address"))
+            if "lidarr_api_key" in data:
+                self.lidarr_api_key = _clean_str(data.get("lidarr_api_key"))
+            if "root_folder_path" in data:
+                self.root_folder_path = _clean_str(data.get("root_folder_path"))
+            if "youtube_api_key" in data:
+                self.youtube_api_key = _clean_str(data.get("youtube_api_key"))
+            if "last_fm_api_key" in data:
+                self.last_fm_api_key = _clean_str(data.get("last_fm_api_key"))
+            if "last_fm_api_secret" in data:
+                self.last_fm_api_secret = _clean_str(data.get("last_fm_api_secret"))
+
+            if "quality_profile_id" in data:
+                self.quality_profile_id = _coerce_int(
+                    data.get("quality_profile_id"),
+                    self.quality_profile_id,
+                    minimum=1,
+                )
+            if "metadata_profile_id" in data:
+                self.metadata_profile_id = _coerce_int(
+                    data.get("metadata_profile_id"),
+                    self.metadata_profile_id,
+                    minimum=1,
+                )
+            if "lidarr_api_timeout" in data:
+                self.lidarr_api_timeout = _coerce_float(
+                    data.get("lidarr_api_timeout"),
+                    float(self.lidarr_api_timeout),
+                    minimum=1.0,
+                )
+            if "similar_artist_batch_size" in data:
+                self.similar_artist_batch_size = _coerce_int(
+                    data.get("similar_artist_batch_size"),
+                    self.similar_artist_batch_size,
+                    minimum=1,
+                )
+
+            if "fallback_to_top_result" in data:
+                self.fallback_to_top_result = _coerce_bool(
+                    data.get("fallback_to_top_result"),
+                    self.fallback_to_top_result,
+                )
+            if "search_for_missing_albums" in data:
+                self.search_for_missing_albums = _coerce_bool(
+                    data.get("search_for_missing_albums"),
+                    self.search_for_missing_albums,
+                )
+            if "dry_run_adding_to_lidarr" in data:
+                self.dry_run_adding_to_lidarr = _coerce_bool(
+                    data.get("dry_run_adding_to_lidarr"),
+                    self.dry_run_adding_to_lidarr,
+                )
+            if "auto_start" in data:
+                self.auto_start = _coerce_bool(data.get("auto_start"), self.auto_start)
+            if "auto_start_delay" in data:
+                self.auto_start_delay = _coerce_float(
+                    data.get("auto_start_delay"),
+                    float(self.auto_start_delay),
+                    minimum=0.0,
+                )
+
+            if "openai_api_key" in data:
+                self.openai_api_key = _clean_str(data.get("openai_api_key"))
+            if "openai_model" in data:
+                self.openai_model = _clean_str(data.get("openai_model"))
+            if "openai_max_seed_artists" in data:
+                self.openai_max_seed_artists = _coerce_int(
+                    data.get("openai_max_seed_artists"),
+                    self.openai_max_seed_artists,
+                    minimum=1,
+                )
+
             self._configure_openai_client()
         except Exception as exc:
             self.logger.error(f"Failed to update settings: {exc}")

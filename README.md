@@ -134,8 +134,10 @@ All variables can be supplied in lowercase (preferred for `.env`) or uppercase (
 | `lidarr_address` | `http://192.168.1.1:8686` | Base URL of your Lidarr instance. |
 | `lidarr_api_key` | – | Lidarr API key for artist lookups and additions. |
 | `root_folder_path` | `/data/media/music/` | Default root path used when adding new artists in Lidarr. |
+| `lidarr_api_timeout` | `120` | Seconds to wait for Lidarr before timing out requests. |
 | `quality_profile_id` | `1` | Numeric profile ID from Lidarr (see [issue #1](https://github.com/Dodelidoo-Labs/sonobarr/issues/1)). |
 | `metadata_profile_id` | `1` | Numeric metadata profile ID. |
+| `fallback_to_top_result` | `false` | When MusicBrainz finds no strong match, fall back to the first Lidarr search result. |
 | `search_for_missing_albums` | `false` | Toggle Lidarr’s “search for missing” flag when adding an artist. |
 | `dry_run_adding_to_lidarr` | `false` | If `true`, Sonobarr will simulate additions without calling Lidarr. |
 | `last_fm_api_key` | – | Last.fm API key for similarity lookups. |

@@ -1,11 +1,30 @@
 secret_key=
+
+# Lidarr configuration
+lidarr_address=http://192.168.1.1:8686
+lidarr_api_key=
+root_folder_path=/data/media/music/
+quality_profile_id=1
+metadata_profile_id=1
+lidarr_api_timeout=120
+fallback_to_top_result=false
+search_for_missing_albums=false
+dry_run_adding_to_lidarr=false
+
+# Discovery tuning
+similar_artist_batch_size=10
+auto_start=false
+auto_start_delay=60
+
+# External APIs
 last_fm_api_key=
 last_fm_api_secret=
-lidarr_address=http://192.168.1.1:8686
-quality_profile_id=1
-lidarr_api_key=
 youtube_api_key=
-similar_artist_batch_size=10
+openai_api_key=
+openai_model=gpt-4o-mini
+openai_max_seed_artists=5
+
+# Super-admin bootstrap (used on first launch)
 sonobarr_superadmin_username=admin
 sonobarr_superadmin_password=change-me
 sonobarr_superadmin_display_name=Super Admin
