@@ -75,17 +75,29 @@ class OpenAIRecommender:
             f"{', '.join(existing_artists[:50]) if existing_artists else 'None provided.'}"
         )
 
+        request_kwargs = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        }
+
+        temperature_value = 0.7
+        if temperature_value is not None:
+            request_kwargs["temperature"] = temperature_value
+
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0.7,
-            )
+            response = self.client.chat.completions.create(**request_kwargs)
         except OpenAIError as exc:  # pragma: no cover - network failure path
-            raise RuntimeError(str(exc)) from exc
+            message = str(exc)
+            if "temperature" in message.lower() and "unsupported" in message.lower() and request_kwargs.pop("temperature", None) is not None:
+                try:
+                    response = self.client.chat.completions.create(**request_kwargs)
+                except OpenAIError as retry_exc:  # pragma: no cover - network failure path
+                    raise RuntimeError(str(retry_exc)) from retry_exc
+            else:
+                raise RuntimeError(message) from exc
 
         try:
             content = response.choices[0].message.content

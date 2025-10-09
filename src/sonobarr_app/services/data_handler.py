@@ -11,7 +11,7 @@ import time
 import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import musicbrainzngs
 import pylast
@@ -315,8 +315,20 @@ class DataHandler:
         }
         self.socketio.emit("lidarr_sidebar_update", payload, room=sid)
 
-        seed_cards, missing_names = self._build_artist_payloads_from_names(seeds)
-        if not seed_cards:
+        existing_names = {unidecode(item["Name"]).lower() for item in session.recommended_artists}
+        missing_names: List[str] = []
+        streamed_any = False
+
+        for payload in self._iter_artist_payloads_from_names(seeds, missing=missing_names):
+            normalized = unidecode(payload["Name"]).lower()
+            if normalized in existing_names:
+                continue
+            session.recommended_artists.append(payload)
+            existing_names.add(normalized)
+            streamed_any = True
+            self.socketio.emit("more_artists_loaded", [payload], room=sid)
+
+        if not streamed_any:
             self.logger.error("Failed to build artist cards for AI seeds: %s", seeds)
             self.socketio.emit(
                 "ai_prompt_error",
@@ -337,16 +349,13 @@ class DataHandler:
             )
             return
 
-        session.recommended_artists.extend(seed_cards)
-        self.socketio.emit("more_artists_loaded", seed_cards, room=sid)
-
         if missing_names:
             self.logger.warning("AI suggested artists not found in Last.fm lookup: %s", ", ".join(missing_names))
             self.socketio.emit(
                 "new_toast_msg",
                 {
                     "title": "Missing artist data",
-                    "message": "Some AI picks couldn't be loaded from Last.fm.",
+                    "message": "Some AI picks couldn't be fully loaded.",
                 },
                 room=sid,
             )
@@ -868,17 +877,20 @@ class DataHandler:
             "Similarity": similarity_label,
         }
 
-    def _build_artist_payloads_from_names(self, names: Sequence[str]) -> Tuple[List[dict], List[str]]:
+    def _iter_artist_payloads_from_names(
+        self,
+        names: Sequence[str],
+        *,
+        missing: Optional[List[str]] = None,
+    ) -> Iterable[dict]:
         if not names:
-            return [], []
+            return []
 
         lfm_network = pylast.LastFMNetwork(
             api_key=self.last_fm_api_key,
             api_secret=self.last_fm_api_secret,
         )
 
-        payloads: List[dict] = []
-        missing: List[str] = []
         seen: set[str] = set()
 
         for raw_name in names:
@@ -890,11 +902,9 @@ class DataHandler:
             seen.add(normalized)
             payload = self._fetch_artist_payload(lfm_network, raw_name)
             if payload:
-                payloads.append(payload)
-            else:
+                yield payload
+            elif missing is not None:
                 missing.append(raw_name)
-
-        return payloads, missing
 
     def _configure_openai_client(self) -> None:
         api_key = (self.openai_api_key or "").strip()
