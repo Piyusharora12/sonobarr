@@ -71,6 +71,7 @@ class Config:
     GITHUB_REPO = get_env_value("github_repo", "Dodelidoo-Labs/sonobarr")
     GITHUB_USER_AGENT = get_env_value("github_user_agent", "sonobarr-app")
     RELEASE_CACHE_TTL_SECONDS = _get_int("release_cache_ttl_seconds", 60 * 60)
+    LOG_LEVEL = (get_env_value("log_level", "INFO") or "INFO").upper()
 
     CONFIG_DIR = str(CONFIG_DIR_PATH)
     SETTINGS_FILE = str(SETTINGS_FILE_PATH)
