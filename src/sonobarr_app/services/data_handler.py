@@ -6,6 +6,7 @@ import os
 import random
 import secrets
 import string
+import tempfile
 import threading
 import time
 import urllib.parse
@@ -1428,38 +1429,52 @@ class DataHandler:
         return str(count)
 
     def save_config_to_file(self) -> None:
+        tmp_path: Optional[Path] = None
         try:
             self.settings_config_file.parent.mkdir(parents=True, exist_ok=True)
-            with self.settings_config_file.open("w", encoding="utf-8") as json_file:
-                json.dump(
-                    {
-                        "lidarr_address": self.lidarr_address,
-                        "lidarr_api_key": self.lidarr_api_key,
-                        "root_folder_path": self.root_folder_path,
-                        "fallback_to_top_result": self.fallback_to_top_result,
-                        "lidarr_api_timeout": float(self.lidarr_api_timeout),
-                        "quality_profile_id": self.quality_profile_id,
-                        "metadata_profile_id": self.metadata_profile_id,
-                        "search_for_missing_albums": self.search_for_missing_albums,
-                        "dry_run_adding_to_lidarr": self.dry_run_adding_to_lidarr,
-                        "app_name": self.app_name,
-                        "app_rev": self.app_rev,
-                        "app_url": self.app_url,
-                        "last_fm_api_key": self.last_fm_api_key,
-                        "last_fm_api_secret": self.last_fm_api_secret,
-                        "auto_start": self.auto_start,
-                        "auto_start_delay": self.auto_start_delay,
-                        "youtube_api_key": self.youtube_api_key,
-                        "similar_artist_batch_size": self.similar_artist_batch_size,
-                        "openai_api_key": self.openai_api_key,
-                        "openai_model": self.openai_model,
-                        "openai_max_seed_artists": self.openai_max_seed_artists,
-                    },
-                    json_file,
-                    indent=4,
-                )
+            payload = {
+                "lidarr_address": self.lidarr_address,
+                "lidarr_api_key": self.lidarr_api_key,
+                "root_folder_path": self.root_folder_path,
+                "fallback_to_top_result": self.fallback_to_top_result,
+                "lidarr_api_timeout": float(self.lidarr_api_timeout),
+                "quality_profile_id": self.quality_profile_id,
+                "metadata_profile_id": self.metadata_profile_id,
+                "search_for_missing_albums": self.search_for_missing_albums,
+                "dry_run_adding_to_lidarr": self.dry_run_adding_to_lidarr,
+                "app_name": self.app_name,
+                "app_rev": self.app_rev,
+                "app_url": self.app_url,
+                "last_fm_api_key": self.last_fm_api_key,
+                "last_fm_api_secret": self.last_fm_api_secret,
+                "auto_start": self.auto_start,
+                "auto_start_delay": self.auto_start_delay,
+                "youtube_api_key": self.youtube_api_key,
+                "similar_artist_batch_size": self.similar_artist_batch_size,
+                "openai_api_key": self.openai_api_key,
+                "openai_model": self.openai_model,
+                "openai_max_seed_artists": self.openai_max_seed_artists,
+            }
+
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=self.settings_config_file.parent,
+                delete=False,
+            ) as tmp_file:
+                json.dump(payload, tmp_file, indent=4)
+                tmp_file.flush()
+                os.fchmod(tmp_file.fileno(), 0o600)
+                os.fsync(tmp_file.fileno())
+                tmp_path = Path(tmp_file.name)
+
+            os.replace(tmp_path, self.settings_config_file)
+            os.chmod(self.settings_config_file, 0o600)
         except Exception as exc:  # pragma: no cover - filesystem errors
             self.logger.error(f"Error Saving Config: {exc}")
+        finally:
+            if tmp_path and tmp_path.exists():
+                tmp_path.unlink(missing_ok=True)
 
     def get_mbid_from_musicbrainz(self, artist_name: str) -> Optional[str]:
         result = musicbrainzngs.search_artists(artist=artist_name)
