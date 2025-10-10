@@ -17,7 +17,6 @@ class User(UserMixin, db.Model):
     display_name = db.Column(db.String(120), nullable=True)
     avatar_url = db.Column(db.String(512), nullable=True)
     lastfm_username = db.Column(db.String(120), nullable=True)
-    lastfm_session_key = db.Column(db.String(64), nullable=True)
     listenbrainz_username = db.Column(db.String(120), nullable=True)
     listenbrainz_token = db.Column(db.String(255), nullable=True)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)

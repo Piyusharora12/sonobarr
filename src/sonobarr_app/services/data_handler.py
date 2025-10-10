@@ -162,7 +162,6 @@ class DataHandler:
 
         lastfm_service_ready = self.last_fm_user_service is not None
         lastfm_username = user.lastfm_username if user else None
-        lastfm_session_key = (user.lastfm_session_key if user else None) or None
         lastfm_enabled = bool(lastfm_service_ready and lastfm_username)
         if not lastfm_service_ready:
             lastfm_reason = "Administrator must configure Last.fm API keys in Settings."
@@ -185,7 +184,6 @@ class DataHandler:
                 "username": lastfm_username,
                 "reason": lastfm_reason,
                 "configured": lastfm_service_ready,
-                "linked": bool(lastfm_username and lastfm_session_key),
             },
             "listenbrainz": {
                 "enabled": listenbrainz_enabled,
@@ -538,13 +536,12 @@ class DataHandler:
                 )
                 return
             try:
-                session_key = (user.lastfm_session_key or "").strip() or None
                 recommendations = self.last_fm_user_service.get_recommended_artists(
-                    username, limit=50, session_key=session_key
+                    username, limit=50
                 )
                 if not recommendations:
                     recommendations = self.last_fm_user_service.get_top_artists(
-                        username, limit=50, session_key=session_key
+                        username, limit=50
                     )
                 seeds = [artist.name for artist in recommendations if artist.name]
             except Exception as exc:  # pragma: no cover - network errors

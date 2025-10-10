@@ -34,25 +34,7 @@
               <input type="text" class="form-control" id="lastfm_username" name="lastfm_username"
                      value="{{ current_user.lastfm_username or '' }}" placeholder="e.g., yourlastfmhandle">
               <div class="form-text">Optional. Used to pull personal recommendations while keeping the global API key.</div>
-              <div class="mt-2 d-flex align-items-center gap-3">
-                {% if current_user.lastfm_session_key %}
-                  <span class="badge bg-success">Linked</span>
-                  <div class="form-check mb-0">
-                    <input class="form-check-input" type="checkbox" id="lastfm_unlink" name="lastfm_unlink">
-                    <label class="form-check-label" for="lastfm_unlink">Unlink Last.fm account</label>
-                  </div>
-                {% else %}
-                  <button type="submit" class="btn btn-sm btn-outline-primary" formmethod="post" formaction="{{ url_for('main.lastfm_begin_link') }}">Link Last.fm</button>
-                {% endif %}
-              </div>
-              {% if not current_user.lastfm_session_key %}
-              <div class="form-text">After authorizing on Last.fm, return here and click Complete if needed.</div>
-              {% if has_lastfm_link_token %}
-              <div class="mt-2">
-                <button type="submit" class="btn btn-sm btn-success" formmethod="post" formaction="{{ url_for('main.lastfm_complete_link') }}">Complete Last.fm link</button>
-              </div>
-              {% endif %}
-              {% endif %}
+              <div class="form-text">We use your public Last.fm profile to approximate recommendations. Linking is not required.</div>
             </div>
             <div class="mb-3">
               <label for="listenbrainz_username" class="form-label">ListenBrainz username</label>

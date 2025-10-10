@@ -306,13 +306,7 @@ function updatePersonalButtons() {
 			personalLastfmButton.disabled = !lastfmReady || loading;
 			if (lastfmReady) {
 				var readyMessage = '';
-				if (lastfm.linked) {
-					readyMessage = 'Linked to your Last.fm account';
-					if (lastfm.username) {
-						readyMessage += ' (' + lastfm.username + ')';
-					}
-					readyMessage += '.';
-				} else if (lastfm.username) {
+				if (lastfm.username) {
 					readyMessage =
 						'Ready with Last.fm profile ' + lastfm.username + '.';
 				} else {
