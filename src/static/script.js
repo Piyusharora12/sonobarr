@@ -305,9 +305,20 @@ function updatePersonalButtons() {
 		} else {
 			personalLastfmButton.disabled = !lastfmReady || loading;
 			if (lastfmReady) {
-				var readyMessage = lastfm.username
-					? 'Ready with Last.fm profile ' + lastfm.username + '.'
-					: 'Ready to use your Last.fm listening history.';
+				var readyMessage = '';
+				if (lastfm.linked) {
+					readyMessage = 'Linked to your Last.fm account';
+					if (lastfm.username) {
+						readyMessage += ' (' + lastfm.username + ')';
+					}
+					readyMessage += '.';
+				} else if (lastfm.username) {
+					readyMessage =
+						'Ready with Last.fm profile ' + lastfm.username + '.';
+				} else {
+					readyMessage =
+						'Ready to use your Last.fm listening history.';
+				}
 				set_hint_text(personalLastfmHint, readyMessage);
 			} else {
 				set_hint_text(

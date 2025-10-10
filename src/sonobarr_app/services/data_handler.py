@@ -162,6 +162,7 @@ class DataHandler:
 
         lastfm_service_ready = self.last_fm_user_service is not None
         lastfm_username = user.lastfm_username if user else None
+        lastfm_session_key = (user.lastfm_session_key if user else None) or None
         lastfm_enabled = bool(lastfm_service_ready and lastfm_username)
         if not lastfm_service_ready:
             lastfm_reason = "Administrator must configure Last.fm API keys in Settings."
@@ -184,6 +185,7 @@ class DataHandler:
                 "username": lastfm_username,
                 "reason": lastfm_reason,
                 "configured": lastfm_service_ready,
+                "linked": bool(lastfm_username and lastfm_session_key),
             },
             "listenbrainz": {
                 "enabled": listenbrainz_enabled,
@@ -536,9 +538,14 @@ class DataHandler:
                 )
                 return
             try:
-                recommendations = self.last_fm_user_service.get_recommended_artists(username, limit=50)
+                session_key = (user.lastfm_session_key or "").strip() or None
+                recommendations = self.last_fm_user_service.get_recommended_artists(
+                    username, limit=50, session_key=session_key
+                )
                 if not recommendations:
-                    recommendations = self.last_fm_user_service.get_top_artists(username, limit=50)
+                    recommendations = self.last_fm_user_service.get_top_artists(
+                        username, limit=50, session_key=session_key
+                    )
                 seeds = [artist.name for artist in recommendations if artist.name]
             except Exception as exc:  # pragma: no cover - network errors
                 self.logger.error("Failed to load Last.fm recommendations for %s: %s", username, exc)
@@ -597,8 +604,17 @@ class DataHandler:
             )
             return
 
+        # Ensure we have the user's Lidarr library cached so we can filter out owned artists
         if not session.cleaned_lidarr_items:
-            session.cleaned_lidarr_items = self._copy_cached_cleaned_names()
+            cleaned = self._copy_cached_cleaned_names()
+            if not cleaned:
+                try:
+                    # Populate cache synchronously; this updates both cache and session
+                    self.get_artists_from_lidarr(sid)
+                    cleaned = self._copy_cached_cleaned_names()
+                except Exception:  # pragma: no cover - network errors
+                    cleaned = []
+            session.cleaned_lidarr_items = cleaned
         cleaned_library_names = set(session.cleaned_lidarr_items)
 
         filtered_seeds: List[str] = []
@@ -613,11 +629,33 @@ class DataHandler:
             self.logger.info(
                 "%s personal recommendations matched existing Lidarr artists for user %s", source_label, user.username
             )
+            # Let the client close the spinner gracefully with an ACK even if there are no seeds
+            self.socketio.emit(
+                "user_recs_ack",
+                {
+                    "source": source_key,
+                    "username": username_display,
+                    "seeds": [],
+                    "skipped": skipped_existing,
+                },
+                room=sid,
+            )
             self._emit_personal_error(
                 sid,
                 source_key,
                 "All recommended artists are already in your Lidarr library.",
                 title=f"{source_label} discovery",
+            )
+            # Also ensure sidebar state reflects the stopped run
+            session.mark_stopped()
+            self.socketio.emit(
+                "lidarr_sidebar_update",
+                {
+                    "Status": "Success",
+                    "Data": session.lidarr_items,
+                    "Running": session.running,
+                },
+                room=sid,
             )
             return
 
