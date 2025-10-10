@@ -10,7 +10,7 @@ from flask_socketio import SocketIO, disconnect
 
 def register_socketio_handlers(socketio: SocketIO, data_handler) -> None:
     @socketio.on("connect")
-    def handle_connect():
+    def handle_connect(auth=None):
         if not current_user.is_authenticated:
             return False
         sid = request.sid
@@ -39,13 +39,7 @@ def register_socketio_handlers(socketio: SocketIO, data_handler) -> None:
             return
         sid = request.sid
 
-        thread = threading.Thread(
-            target=data_handler.get_artists_from_lidarr,
-            args=(sid,),
-            name=f"LidarrFetch-{sid}",
-            daemon=True,
-        )
-        thread.start()
+        socketio.start_background_task(data_handler.get_artists_from_lidarr, sid)
 
     @socketio.on("start_req")
     def handle_start_req(selected_artists: Any):
@@ -55,13 +49,7 @@ def register_socketio_handlers(socketio: SocketIO, data_handler) -> None:
         sid = request.sid
         selected = list(selected_artists or [])
 
-        thread = threading.Thread(
-            target=data_handler.start,
-            args=(sid, selected),
-            name=f"StartSearch-{sid}",
-            daemon=True,
-        )
-        thread.start()
+        socketio.start_background_task(data_handler.start, sid, selected)
 
     @socketio.on("ai_prompt_req")
     def handle_ai_prompt(payload: Any):
@@ -73,13 +61,26 @@ def register_socketio_handlers(socketio: SocketIO, data_handler) -> None:
             prompt = payload.get("prompt", "")
         else:
             prompt = str(payload or "")
-        thread = threading.Thread(
-            target=data_handler.ai_prompt,
-            args=(sid, prompt),
-            name=f"AIPrompt-{sid}",
-            daemon=True,
-        )
-        thread.start()
+        socketio.start_background_task(data_handler.ai_prompt, sid, prompt)
+
+    @socketio.on("personal_sources_poll")
+    def handle_personal_sources_poll():
+        if not current_user.is_authenticated:
+            disconnect()
+            return
+        data_handler.emit_personal_sources_state(request.sid)
+
+    @socketio.on("user_recs_req")
+    def handle_user_recs(payload: Any):
+        if not current_user.is_authenticated:
+            disconnect()
+            return
+        sid = request.sid
+        if isinstance(payload, dict):
+            source = payload.get("source", "")
+        else:
+            source = str(payload or "")
+        socketio.start_background_task(data_handler.personal_recommendations, sid, source)
 
     @socketio.on("stop_req")
     def handle_stop_req():
@@ -94,13 +95,7 @@ def register_socketio_handlers(socketio: SocketIO, data_handler) -> None:
             disconnect()
             return
         sid = request.sid
-        thread = threading.Thread(
-            target=data_handler.find_similar_artists,
-            args=(sid,),
-            name=f"LoadMore-{sid}",
-            daemon=True,
-        )
-        thread.start()
+        socketio.start_background_task(data_handler.find_similar_artists, sid)
 
     @socketio.on("adder")
     def handle_add_artist(raw_artist_name: str):
@@ -108,13 +103,7 @@ def register_socketio_handlers(socketio: SocketIO, data_handler) -> None:
             disconnect()
             return
         sid = request.sid
-        thread = threading.Thread(
-            target=data_handler.add_artists,
-            args=(sid, raw_artist_name),
-            name=f"AddArtist-{sid}",
-            daemon=True,
-        )
-        thread.start()
+        socketio.start_background_task(data_handler.add_artists, sid, raw_artist_name)
 
     @socketio.on("load_settings")
     def handle_load_settings():
@@ -181,10 +170,4 @@ def register_socketio_handlers(socketio: SocketIO, data_handler) -> None:
             disconnect()
             return
         sid = request.sid
-        thread = threading.Thread(
-            target=data_handler.prehear,
-            args=(sid, raw_artist_name),
-            name=f"Prehear-{sid}",
-            daemon=True,
-        )
-        thread.start()
+        socketio.start_background_task(data_handler.prehear, sid, raw_artist_name)

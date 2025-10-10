@@ -1,17 +1,16 @@
 services:
   sonobarr:
-    image: ghcr.io/dodelidoo-labs/sonobarr:latest # or ghcr.io/dodelidoo-labs/sonobarr:0.1.0 for a specific version
+    image: ghcr.io/dodelidoo-labs/sonobarr:latest # pin to ghcr.io/dodelidoo-labs/sonobarr:0.7.0 for a specific release
     container_name: sonobarr
     env_file:
       - .env
     volumes:
       - ./config:/sonobarr/config
       - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "5000:5000"
     restart: unless-stopped
-    networks:
-      npm_proxy:
-        ipv4_address: 192.168.97.23 # change to an available IP on your proxy network
 
-networks:
-  npm_proxy:
-    external: true
+# Need to attach Sonobarr to an external reverse-proxy network instead of
+# publishing port 5000? Remove the `ports:` section above and add a `networks:`
+# stanza that matches your proxy. See the README for details.

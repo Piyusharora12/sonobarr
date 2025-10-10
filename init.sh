@@ -18,7 +18,8 @@ PGID=${PGID:-1000}
 APP_DIR=/sonobarr
 SRC_DIR="${APP_DIR}/src"
 CONFIG_DIR="${APP_DIR}/config"
-MIGRATIONS_DIR=${MIGRATIONS_DIR:-${CONFIG_DIR}/migrations}
+CONFIG_MIGRATIONS_DIR="${CONFIG_DIR}/migrations"
+MIGRATIONS_DIR=${MIGRATIONS_DIR:-${APP_DIR}/migrations}
 
 export PYTHONPATH=${PYTHONPATH:-${SRC_DIR}}
 export FLASK_APP=${FLASK_APP:-src.Sonobarr}
@@ -36,18 +37,18 @@ echo "Setting up directories.."
 mkdir -p "${CONFIG_DIR}"
 chown -R ${PUID}:${PGID} "${APP_DIR}"
 
-if [ -d "${MIGRATIONS_DIR}" ] && [ -f "${MIGRATIONS_DIR}/env.py" ]; then
-   echo "Applying database migrations..."
-   su-exec ${PUID}:${PGID} flask db upgrade --directory "${MIGRATIONS_DIR}"
-elif [ ! -d "${MIGRATIONS_DIR}" ]; then
-   echo "Initializing migrations directory at ${MIGRATIONS_DIR}..."
-   su-exec ${PUID}:${PGID} flask db init --directory "${MIGRATIONS_DIR}"
-   echo "Applying database migrations..."
-   su-exec ${PUID}:${PGID} flask db upgrade --directory "${MIGRATIONS_DIR}"
-else
-   echo "Migrations directory present but missing env.py, skipping automatic upgrade."
+if [ -d "${CONFIG_MIGRATIONS_DIR}" ]; then
+  echo "Removing legacy migrations directory at ${CONFIG_MIGRATIONS_DIR}..."
+  rm -rf "${CONFIG_MIGRATIONS_DIR}"
 fi
 
-# Start the application with the specified user permissions
-echo "Running Sonobarr..."
+if [ ! -d "${MIGRATIONS_DIR}" ]; then
+  echo "Error: bundled migrations directory ${MIGRATIONS_DIR} is missing." >&2
+  exit 1
+fi
+
+echo "Applying database migrations..."
+SONOBARR_SKIP_PROFILE_BACKFILL=1 su-exec ${PUID}:${PGID} flask db upgrade --directory "${MIGRATIONS_DIR}"
+
+echo "Starting app..."
 exec su-exec ${PUID}:${PGID} gunicorn src.Sonobarr:app -c gunicorn_config.py

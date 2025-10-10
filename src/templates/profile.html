@@ -28,6 +28,15 @@
               <div class="form-text">PNG/JPEG/SVG URLs work best. Leave empty to use the default icon.</div>
             </div>
             <hr>
+            <p class="fw-semibold">Listening services</p>
+            <div class="mb-3">
+              <label for="lastfm_username" class="form-label">Last.fm username</label>
+              <input type="text" class="form-control" id="lastfm_username" name="lastfm_username"
+                     value="{{ current_user.lastfm_username or '' }}" placeholder="e.g., yourlastfmhandle">
+              <div class="form-text">Optional. Used to pull personal recommendations while keeping the global API key.</div>
+              <div class="form-text">We use your public Last.fm profile to approximate recommendations. Linking is not required.</div>
+            </div>
+            <hr>
             <p class="fw-semibold">Change password</p>
             <div class="mb-3">
               <label for="current_password" class="form-label">Current password</label>

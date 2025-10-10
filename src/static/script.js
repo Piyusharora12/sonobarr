@@ -55,6 +55,12 @@ const auto_start_delay_input = document.getElementById('auto-start-delay');
 const last_fm_api_key_input = document.getElementById('last-fm-api-key');
 const last_fm_api_secret_input = document.getElementById('last-fm-api-secret');
 
+const personalLastfmButton = document.getElementById('personal-lastfm-button');
+const personalLastfmSpinner = document.getElementById(
+	'personal-lastfm-spinner'
+);
+const personalLastfmHint = document.getElementById('personal-lastfm-hint');
+
 const ai_assist_button = document.getElementById('ai-assist-button');
 const ai_helper_modal = document.getElementById('ai-helper-modal');
 const ai_helper_form = document.getElementById('ai-helper-form');
@@ -68,6 +74,12 @@ var lidarr_items = [];
 var socket = io({
 	withCredentials: true,
 });
+
+var personalSourcesState = null;
+var personalDiscoveryState = {
+	inFlight: false,
+	source: null,
+};
 
 // Initial load flow control
 let initialLoadComplete = false;
@@ -114,6 +126,18 @@ if (ai_helper_form) {
 		});
 	});
 }
+
+if (personalLastfmButton) {
+	personalLastfmButton.addEventListener('click', function () {
+		startPersonalDiscovery('lastfm');
+	});
+}
+
+updatePersonalButtons();
+
+socket.on('connect', function () {
+	socket.emit('personal_sources_poll');
+});
 
 function show_header_spinner() {
 	if (header_spinner) {
@@ -237,6 +261,105 @@ function set_ai_form_loading(isLoading) {
 function begin_ai_discovery_flow() {
 	clear_all();
 	show_header_spinner();
+}
+
+function set_hint_text(element, message) {
+	if (!element) {
+		return;
+	}
+	var hasMessage = !!(message && message.trim());
+	element.textContent = hasMessage ? message : '';
+	if (hasMessage) {
+		element.classList.remove('d-none');
+	} else {
+		element.classList.add('d-none');
+	}
+}
+
+function updatePersonalButtons() {
+	var state = personalSourcesState || {};
+	var lastfm = state.lastfm || null;
+	if (personalLastfmButton) {
+		var lastfmReady = !!(lastfm && lastfm.enabled);
+		var loading = personalDiscoveryState.inFlight;
+		var lastfmTitle = 'Stream recommendations from your Last.fm profile.';
+		if (!lastfm) {
+			personalLastfmButton.disabled = true;
+			lastfmTitle = 'Loading Last.fm availability…';
+			set_hint_text(personalLastfmHint, '');
+		} else {
+			personalLastfmButton.disabled = !lastfmReady || loading;
+			if (lastfmReady) {
+				var readyMessage = '';
+				if (lastfm.username) {
+					readyMessage =
+						'Ready with Last.fm profile ' + lastfm.username + '.';
+				} else {
+					readyMessage =
+						'Ready to use your Last.fm listening history.';
+				}
+				set_hint_text(personalLastfmHint, readyMessage);
+			} else {
+				set_hint_text(
+					personalLastfmHint,
+					lastfm.reason || 'Last.fm configuration is incomplete.'
+				);
+				lastfmTitle = lastfm.reason || lastfmTitle;
+			}
+		}
+		personalLastfmButton.title = lastfmTitle;
+	}
+}
+
+function setPersonalDiscoveryLoading(source, isLoading) {
+	var targetSource = source;
+	if (!isLoading) {
+		targetSource = personalDiscoveryState.source;
+	}
+	personalDiscoveryState.inFlight = !!isLoading;
+	personalDiscoveryState.source = isLoading ? source : null;
+	if (personalLastfmSpinner) {
+		personalLastfmSpinner.classList.toggle(
+			'd-none',
+			!(personalDiscoveryState.inFlight && targetSource === 'lastfm')
+		);
+	}
+	if (isLoading) {
+		if (source === 'lastfm' && personalLastfmButton) {
+			personalLastfmButton.blur();
+		}
+	}
+	updatePersonalButtons();
+}
+
+function startPersonalDiscovery(source) {
+	if (!socket.connected) {
+		show_toast('Connection Lost', 'Please reconnect to continue.');
+		return;
+	}
+	if (!personalSourcesState) {
+		show_toast(
+			'Personal discovery',
+			'Hang tight while we load your personal listening services.'
+		);
+		socket.emit('personal_sources_poll');
+		return;
+	}
+	var sourceState = personalSourcesState[source];
+	if (!sourceState || !sourceState.enabled) {
+		var reason = sourceState && sourceState.reason;
+		var serviceTitle =
+			source === 'lastfm' ? 'Last.fm discovery' : 'Personal discovery';
+		show_toast(
+			serviceTitle,
+			reason ||
+				'Configure this service in your profile to unlock personal picks.'
+		);
+		return;
+	}
+	begin_ai_discovery_flow();
+	setPersonalDiscoveryLoading(source, true);
+	socket.emit('user_recs_req', { source: source });
 }
 
 function show_modal_with_lock(modalId, onHidden) {
@@ -884,6 +1007,7 @@ if (settings_form && config_modal) {
 
 lidarr_sidebar.addEventListener('show.bs.offcanvas', function (event) {
 	socket.emit('side_bar_opened');
+	socket.emit('personal_sources_poll');
 });
 
 socket.on('lidarr_sidebar_update', (response) => {
@@ -1030,11 +1154,53 @@ socket.on('ai_prompt_error', function (payload) {
 	show_toast('AI Assistant', message);
 });
 
+socket.on('personal_sources_state', function (state) {
+	personalSourcesState = state || {};
+	updatePersonalButtons();
+});
+
+socket.on('user_recs_ack', function (payload) {
+	var source =
+		payload && payload.source ? String(payload.source).toLowerCase() : '';
+	var username = payload && payload.username ? payload.username : '';
+	var seeds = payload && Array.isArray(payload.seeds) ? payload.seeds : [];
+	var title =
+		source === 'lastfm' ? 'Last.fm discovery' : 'Personal discovery';
+	var message = '';
+	if (seeds.length > 0) {
+		message = 'Streaming ' + seeds.length + ' picks';
+		if (username) {
+			message += ' for ' + username;
+		}
+		message += '.';
+	} else {
+		message = 'Working from fresh personal recommendations.';
+	}
+	show_toast(title, message);
+});
+
+socket.on('user_recs_error', function (payload) {
+	var source =
+		payload && payload.source ? String(payload.source).toLowerCase() : '';
+	var message =
+		payload && payload.message
+			? payload.message
+			: 'We could not fetch your personal recommendations right now.';
+	hide_header_spinner();
+	setPersonalDiscoveryLoading(null, false);
+	var title =
+		source === 'lastfm' ? 'Last.fm discovery' : 'Personal discovery';
+	show_toast(title, message);
+});
+
 // Server signals that initial batches are complete: show the Load More button now
 socket.on('initial_load_complete', function (payload) {
 	initialLoadComplete = true;
 	initialLoadHasMore = !!(payload && payload.hasMore);
 	loadMorePending = false;
+	if (personalDiscoveryState.inFlight) {
+		setPersonalDiscoveryLoading(null, false);
+	}
 	hide_header_spinner();
 	if (initialLoadHasMore) {
 		create_load_more_button();
@@ -1065,6 +1231,8 @@ socket.on('new_toast_msg', function (data) {
 socket.on('disconnect', function () {
 	show_toast('Connection Lost', 'Please reconnect to continue.');
 	hide_header_spinner();
+	personalSourcesState = null;
+	setPersonalDiscoveryLoading(null, false);
 	clear_all();
 });
 
