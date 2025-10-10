@@ -63,6 +63,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         logger=app.logger,
     )
 
+    data_handler.set_flask_app(app)
     app.extensions["data_handler"] = data_handler
     app.extensions["release_client"] = release_client
 

@@ -66,6 +66,7 @@ class DataHandler:
     def __init__(self, socketio, logger: Optional[logging.Logger], app_config: Dict[str, Any]) -> None:
         self.socketio = socketio
         self.logger = logger or logging.getLogger("sonobarr")
+        self._flask_app = None  # bound in app factory to allow background tasks to use app context
         self.musicbrainzngs_logger = logging.getLogger("musicbrainzngs")
         self.musicbrainzngs_logger.setLevel(logging.WARNING)
         self.pylast_logger = logging.getLogger("pylast")
@@ -99,6 +100,11 @@ class DataHandler:
         self.listenbrainz_user_service: Optional[ListenBrainzUserService] = None
 
         self.load_environ_or_config_settings()
+
+    # App binding ----------------------------------------------------
+    def set_flask_app(self, app) -> None:
+        """Bind the Flask app so background tasks can push an app context."""
+        self._flask_app = app
 
     def _env(self, key: str) -> str:
         value = get_env_value(key)
@@ -139,6 +145,10 @@ class DataHandler:
         if user_id is None:
             return None
         try:
+            if self._flask_app is not None:
+                with self._flask_app.app_context():
+                    return User.query.get(int(user_id))
+            # Fallback: rely on current app context if already present
             return User.query.get(int(user_id))
         except (TypeError, ValueError):
             return None
