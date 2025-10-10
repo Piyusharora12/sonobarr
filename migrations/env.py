@@ -11,10 +11,13 @@ from flask import current_app
 # access to the values within the .ini file in use.
 config = context.config
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
-if config.config_file_name is not None:
+# Interpret the config file for Python logging when available.
+# Older runtime scaffolds may not include alembic.ini alongside env.py,
+# so fall back to basicConfig instead of crashing during upgrades.
+if config.config_file_name is not None and Path(config.config_file_name).exists():
     fileConfig(config.config_file_name)
+else:
+    logging.basicConfig(level=logging.INFO)
 
 logger = logging.getLogger("alembic.env")
 
