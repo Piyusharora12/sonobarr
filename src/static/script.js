@@ -60,15 +60,6 @@ const personalLastfmSpinner = document.getElementById(
 	'personal-lastfm-spinner'
 );
 const personalLastfmHint = document.getElementById('personal-lastfm-hint');
-const personalListenbrainzButton = document.getElementById(
-	'personal-listenbrainz-button'
-);
-const personalListenbrainzSpinner = document.getElementById(
-	'personal-listenbrainz-spinner'
-);
-const personalListenbrainzHint = document.getElementById(
-	'personal-listenbrainz-hint'
-);
 
 const ai_assist_button = document.getElementById('ai-assist-button');
 const ai_helper_modal = document.getElementById('ai-helper-modal');
@@ -139,12 +130,6 @@ if (ai_helper_form) {
 if (personalLastfmButton) {
 	personalLastfmButton.addEventListener('click', function () {
 		startPersonalDiscovery('lastfm');
-	});
-}
-
-if (personalListenbrainzButton) {
-	personalListenbrainzButton.addEventListener('click', function () {
-		startPersonalDiscovery('listenbrainz');
 	});
 }
 
@@ -324,45 +309,6 @@ function updatePersonalButtons() {
 		}
 		personalLastfmButton.title = lastfmTitle;
 	}
-
-	var listenbrainz = state.listenbrainz || null;
-	if (personalListenbrainzButton) {
-		var listenbrainzReady = !!(listenbrainz && listenbrainz.enabled);
-		var loadingLb = personalDiscoveryState.inFlight;
-		var listenbrainzTitle =
-			'Stream recommendations from your ListenBrainz profile.';
-		if (!listenbrainz) {
-			personalListenbrainzButton.disabled = true;
-			listenbrainzTitle = 'Loading ListenBrainz availability…';
-			set_hint_text(personalListenbrainzHint, '');
-		} else {
-			personalListenbrainzButton.disabled =
-				!listenbrainzReady || loadingLb;
-			if (listenbrainzReady) {
-				var lbMessage = '';
-				if (listenbrainz.requiresToken) {
-					lbMessage =
-						'Add your ListenBrainz token in Profile for richer recommendations.';
-				} else if (listenbrainz.username) {
-					lbMessage =
-						'Ready with ListenBrainz user ' +
-						listenbrainz.username +
-						'.';
-				} else {
-					lbMessage = 'Ready to use ListenBrainz insights.';
-				}
-				set_hint_text(personalListenbrainzHint, lbMessage);
-			} else {
-				set_hint_text(
-					personalListenbrainzHint,
-					listenbrainz.reason ||
-						'ListenBrainz configuration is incomplete.'
-				);
-				listenbrainzTitle = listenbrainz.reason || listenbrainzTitle;
-			}
-		}
-		personalListenbrainzButton.title = listenbrainzTitle;
-	}
 }
 
 function setPersonalDiscoveryLoading(source, isLoading) {
@@ -378,21 +324,9 @@ function setPersonalDiscoveryLoading(source, isLoading) {
 			!(personalDiscoveryState.inFlight && targetSource === 'lastfm')
 		);
 	}
-	if (personalListenbrainzSpinner) {
-		personalListenbrainzSpinner.classList.toggle(
-			'd-none',
-			!(
-				personalDiscoveryState.inFlight &&
-				targetSource === 'listenbrainz'
-			)
-		);
-	}
 	if (isLoading) {
 		if (source === 'lastfm' && personalLastfmButton) {
 			personalLastfmButton.blur();
-		}
-		if (source === 'listenbrainz' && personalListenbrainzButton) {
-			personalListenbrainzButton.blur();
 		}
 	}
 	updatePersonalButtons();
@@ -414,10 +348,10 @@ function startPersonalDiscovery(source) {
 	var sourceState = personalSourcesState[source];
 	if (!sourceState || !sourceState.enabled) {
 		var reason = sourceState && sourceState.reason;
+		var serviceTitle =
+			source === 'lastfm' ? 'Last.fm discovery' : 'Personal discovery';
 		show_toast(
-			source === 'lastfm'
-				? 'Last.fm discovery'
-				: 'ListenBrainz discovery',
+			serviceTitle,
 			reason ||
 				'Configure this service in your profile to unlock personal picks.'
 		);
@@ -1230,12 +1164,8 @@ socket.on('user_recs_ack', function (payload) {
 		payload && payload.source ? String(payload.source).toLowerCase() : '';
 	var username = payload && payload.username ? payload.username : '';
 	var seeds = payload && Array.isArray(payload.seeds) ? payload.seeds : [];
-	var title = 'Personal discovery';
-	if (source === 'lastfm') {
-		title = 'Last.fm discovery';
-	} else if (source === 'listenbrainz') {
-		title = 'ListenBrainz discovery';
-	}
+	var title =
+		source === 'lastfm' ? 'Last.fm discovery' : 'Personal discovery';
 	var message = '';
 	if (seeds.length > 0) {
 		message = 'Streaming ' + seeds.length + ' picks';
@@ -1258,12 +1188,8 @@ socket.on('user_recs_error', function (payload) {
 			: 'We could not fetch your personal recommendations right now.';
 	hide_header_spinner();
 	setPersonalDiscoveryLoading(null, false);
-	var title = 'Personal discovery';
-	if (source === 'lastfm') {
-		title = 'Last.fm discovery';
-	} else if (source === 'listenbrainz') {
-		title = 'ListenBrainz discovery';
-	}
+	var title =
+		source === 'lastfm' ? 'Last.fm discovery' : 'Personal discovery';
 	show_toast(title, message);
 });
 

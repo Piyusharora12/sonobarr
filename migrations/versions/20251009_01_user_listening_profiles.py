@@ -1,4 +1,4 @@
-"""add user listening profile columns
+"""add Last.fm username column
 
 Revision ID: 20251009_01
 Revises: 
@@ -24,11 +24,9 @@ def upgrade():
 
     with op.batch_alter_table("users", schema=None) as batch_op:
         if "lastfm_username" not in existing_columns:
-            batch_op.add_column(sa.Column("lastfm_username", sa.String(length=120), nullable=True))
-        if "listenbrainz_username" not in existing_columns:
-            batch_op.add_column(sa.Column("listenbrainz_username", sa.String(length=120), nullable=True))
-        if "listenbrainz_token" not in existing_columns:
-            batch_op.add_column(sa.Column("listenbrainz_token", sa.String(length=255), nullable=True))
+            batch_op.add_column(
+                sa.Column("lastfm_username", sa.String(length=120), nullable=True)
+            )
 
 
 def downgrade():
@@ -37,9 +35,5 @@ def downgrade():
     existing_columns = {col["name"] for col in inspector.get_columns("users")}
 
     with op.batch_alter_table("users", schema=None) as batch_op:
-        if "listenbrainz_token" in existing_columns:
-            batch_op.drop_column("listenbrainz_token")
-        if "listenbrainz_username" in existing_columns:
-            batch_op.drop_column("listenbrainz_username")
         if "lastfm_username" in existing_columns:
             batch_op.drop_column("lastfm_username")

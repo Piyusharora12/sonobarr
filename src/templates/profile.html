@@ -36,24 +36,6 @@
               <div class="form-text">Optional. Used to pull personal recommendations while keeping the global API key.</div>
               <div class="form-text">We use your public Last.fm profile to approximate recommendations. Linking is not required.</div>
             </div>
-            <div class="mb-3">
-              <label for="listenbrainz_username" class="form-label">ListenBrainz username</label>
-              <input type="text" class="form-control" id="listenbrainz_username" name="listenbrainz_username"
-                     value="{{ current_user.listenbrainz_username or '' }}" placeholder="e.g., yourlistenbrainz">
-              <div class="form-text">Optional. Public ListenBrainz profiles work without a token.</div>
-            </div>
-            <div class="mb-3">
-              <label for="listenbrainz_token" class="form-label">ListenBrainz user token</label>
-              <input type="password" class="form-control" id="listenbrainz_token" name="listenbrainz_token"
-                     autocomplete="off" placeholder="Paste new token to update">
-              <div class="form-text">Optional. Leave blank to keep the current token. Supply a user token for private profiles or higher rate limits.</div>
-            </div>
-            {% if current_user.listenbrainz_token %}
-            <div class="form-check mb-3">
-              <input class="form-check-input" type="checkbox" id="listenbrainz_token_clear" name="listenbrainz_token_clear">
-              <label class="form-check-label" for="listenbrainz_token_clear">Remove existing ListenBrainz token</label>
-            </div>
-            {% endif %}
             <hr>
             <p class="fw-semibold">Change password</p>
             <div class="mb-3">

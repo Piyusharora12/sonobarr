@@ -23,7 +23,6 @@ from ..config import get_env_value
 from ..models import User
 from .openai_client import DEFAULT_MAX_SEED_ARTISTS, OpenAIRecommender
 from .integrations.lastfm_user import LastFmUserService
-from .integrations.listenbrainz_user import ListenBrainzUserService
 
 
 @dataclass
@@ -97,7 +96,6 @@ class DataHandler:
         self.openai_max_seed_artists = DEFAULT_MAX_SEED_ARTISTS
         self.openai_recommender: Optional[OpenAIRecommender] = None
         self.last_fm_user_service: Optional[LastFmUserService] = None
-        self.listenbrainz_user_service: Optional[ListenBrainzUserService] = None
 
         self.load_environ_or_config_settings()
 
@@ -169,28 +167,12 @@ class DataHandler:
             lastfm_reason = "Add your Last.fm username in Profile → Listening services."
         else:
             lastfm_reason = None
-
-        listenbrainz_username = user.listenbrainz_username if user else None
-        listenbrainz_enabled = bool(listenbrainz_username)
-        if not listenbrainz_username:
-            listenbrainz_reason = "Add your ListenBrainz username in Profile → Listening services."
-        else:
-            listenbrainz_reason = None
-        listenbrainz_has_token = bool(user and user.listenbrainz_token)
-
         state = {
             "lastfm": {
                 "enabled": lastfm_enabled,
                 "username": lastfm_username,
                 "reason": lastfm_reason,
                 "configured": lastfm_service_ready,
-            },
-            "listenbrainz": {
-                "enabled": listenbrainz_enabled,
-                "username": listenbrainz_username,
-                "reason": listenbrainz_reason,
-                "requiresToken": bool(listenbrainz_username and not listenbrainz_has_token),
-                "hasToken": listenbrainz_has_token,
             },
         }
 
@@ -492,9 +474,8 @@ class DataHandler:
 
     def personal_recommendations(self, sid: str, source: str) -> None:
         session = self.ensure_session(sid)
-        source_key = (source or "").strip().lower()
-        source_label = "Last.fm" if source_key == "lastfm" else "ListenBrainz" if source_key == "listenbrainz" else None
-        if not source_label:
+        source_key = (source or "").strip().lower() or "lastfm"
+        if source_key != "lastfm":
             self._emit_personal_error(
                 sid,
                 source_key,
@@ -509,7 +490,26 @@ class DataHandler:
                 sid,
                 source_key,
                 "You need to sign in again before requesting personal recommendations.",
-                title=f"{source_label} discovery",
+                title="Last.fm discovery",
+            )
+            return
+
+        if not self.last_fm_user_service:
+            self._emit_personal_error(
+                sid,
+                source_key,
+                "Administrator must configure a Last.fm API key and secret in Settings before this feature can be used.",
+                title="Last.fm discovery",
+            )
+            return
+
+        username = (user.lastfm_username or "").strip()
+        if not username:
+            self._emit_personal_error(
+                sid,
+                source_key,
+                "Add your Last.fm username under Profile → Listening services to use this feature.",
+                title="Last.fm discovery",
             )
             return
 
@@ -517,70 +517,23 @@ class DataHandler:
         seeds: List[str] = []
         skipped_existing: List[str] = []
 
-        if source_key == "lastfm":
-            if not self.last_fm_user_service:
-                self._emit_personal_error(
-                    sid,
-                    source_key,
-                    "Administrator must configure a Last.fm API key and secret in Settings before this feature can be used.",
-                    title="Last.fm discovery",
-                )
-                return
-            username = (user.lastfm_username or "").strip()
-            if not username:
-                self._emit_personal_error(
-                    sid,
-                    source_key,
-                    "Add your Last.fm username under Profile → Listening services to use this feature.",
-                    title="Last.fm discovery",
-                )
-                return
-            try:
-                recommendations = self.last_fm_user_service.get_recommended_artists(
-                    username, limit=50
-                )
-                if not recommendations:
-                    recommendations = self.last_fm_user_service.get_top_artists(
-                        username, limit=50
-                    )
-                seeds = [artist.name for artist in recommendations if artist.name]
-            except Exception as exc:  # pragma: no cover - network errors
-                self.logger.error("Failed to load Last.fm recommendations for %s: %s", username, exc)
-                self._emit_personal_error(
-                    sid,
-                    source_key,
-                    "We couldn't reach Last.fm right now. Please try again shortly.",
-                    title="Last.fm discovery",
-                )
-                return
-            username_display = username
-        else:  # ListenBrainz
-            username = (user.listenbrainz_username or "").strip()
-            if not username:
-                self._emit_personal_error(
-                    sid,
-                    source_key,
-                    "Add your ListenBrainz username under Profile → Listening services to use this feature.",
-                    title="ListenBrainz discovery",
-                )
-                return
-            token = (user.listenbrainz_token or "").strip() or None
-            service = self.listenbrainz_user_service or ListenBrainzUserService(logger=self.logger)
-            try:
-                recommendations = service.get_user_discoveries(username, user_token=token, limit=50)
-                if not recommendations:
-                    recommendations = service.get_user_top_artists(username, user_token=token, limit=50)
-                seeds = [artist.name for artist in recommendations if artist.name]
-            except Exception as exc:  # pragma: no cover - network errors
-                self.logger.error("Failed to load ListenBrainz recommendations for %s: %s", username, exc)
-                self._emit_personal_error(
-                    sid,
-                    source_key,
-                    "We couldn't reach ListenBrainz right now. Please try again shortly.",
-                    title="ListenBrainz discovery",
-                )
-                return
-            username_display = username
+        try:
+            recommendations = self.last_fm_user_service.get_recommended_artists(username, limit=50)
+            if not recommendations:
+                recommendations = self.last_fm_user_service.get_top_artists(username, limit=50)
+            seeds = [artist.name for artist in recommendations if artist.name]
+        except Exception as exc:  # pragma: no cover - network errors
+            self.logger.error("Failed to load Last.fm recommendations for %s: %s", username, exc)
+            self._emit_personal_error(
+                sid,
+                source_key,
+                "We couldn't reach Last.fm right now. Please try again shortly.",
+                title="Last.fm discovery",
+            )
+            return
+
+        source_label = "Last.fm"
+        username_display = username
 
         elapsed = time.perf_counter() - start_time
         self.logger.info(
@@ -1466,9 +1419,6 @@ class DataHandler:
             self.last_fm_user_service = LastFmUserService(lastfm_key, lastfm_secret)
         else:
             self.last_fm_user_service = None
-
-        # ListenBrainz endpoints support anonymous access; still instantiate for shared logging.
-        self.listenbrainz_user_service = ListenBrainzUserService(logger=self.logger)
 
     def format_numbers(self, count: int) -> str:
         if count >= 1_000_000:

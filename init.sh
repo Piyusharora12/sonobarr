@@ -19,7 +19,8 @@ APP_DIR=/sonobarr
 SRC_DIR="${APP_DIR}/src"
 CONFIG_DIR="${APP_DIR}/config"
 MIGRATIONS_DIR=${MIGRATIONS_DIR:-${CONFIG_DIR}/migrations}
-BUNDLED_MIGRATIONS_DIR=${APP_DIR}/migrations
+BUNDLED_VERSIONS_DIR="${APP_DIR}/migrations/versions"
+SENTINEL="${MIGRATIONS_DIR}/.managed-by-sonobarr-0.7"
 
 export PYTHONPATH=${PYTHONPATH:-${SRC_DIR}}
 export FLASK_APP=${FLASK_APP:-src.Sonobarr}
@@ -34,33 +35,39 @@ echo "-----------------"
 
 # Create the required directories with the correct permissions
 echo "Setting up directories.."
-mkdir -p "${CONFIG_DIR}" "${MIGRATIONS_DIR}"
-
-if [ -d "${BUNDLED_MIGRATIONS_DIR}" ]; then
-   if [ "${BUNDLED_MIGRATIONS_DIR}" != "${MIGRATIONS_DIR}" ]; then
-      echo "Syncing bundled migrations into ${MIGRATIONS_DIR}..."
-      cp -R "${BUNDLED_MIGRATIONS_DIR}/." "${MIGRATIONS_DIR}/"
-   else
-      echo "Bundled migrations already reside at ${MIGRATIONS_DIR}; skipping sync."
-   fi
-else
-   echo "Warning: bundled migrations directory missing at ${BUNDLED_MIGRATIONS_DIR}"
-fi
-
+mkdir -p "${CONFIG_DIR}"
 chown -R ${PUID}:${PGID} "${APP_DIR}"
 
-if [ -d "${MIGRATIONS_DIR}" ] && [ -f "${MIGRATIONS_DIR}/env.py" ]; then
-   echo "Applying database migrations..."
-   SONOBARR_SKIP_PROFILE_BACKFILL=1 su-exec ${PUID}:${PGID} flask db upgrade --directory "${MIGRATIONS_DIR}"
-elif [ ! -d "${MIGRATIONS_DIR}" ]; then
-   echo "Initializing migrations directory at ${MIGRATIONS_DIR}..."
-   su-exec ${PUID}:${PGID} flask db init --directory "${MIGRATIONS_DIR}"
-   echo "Applying database migrations..."
-   SONOBARR_SKIP_PROFILE_BACKFILL=1 su-exec ${PUID}:${PGID} flask db upgrade --directory "${MIGRATIONS_DIR}"
+init_scaffold() {
+  # Generate a clean Alembic scaffold (env.py, alembic.ini, script template)
+  su-exec ${PUID}:${PGID} flask db init --directory "${MIGRATIONS_DIR}"
+  touch "${SENTINEL}"
+}
+
+echo "Preparing migrations scaffold..."
+if [ -d "${MIGRATIONS_DIR}" ]; then
+  if [ ! -f "${SENTINEL}" ]; then
+    echo "Resetting legacy scaffold at ${MIGRATIONS_DIR}..."
+    rm -rf "${MIGRATIONS_DIR}"
+    mkdir -p "${MIGRATIONS_DIR}"
+    init_scaffold()
+  fi
 else
-   echo "Migrations directory present but missing env.py, skipping automatic upgrade."
+  mkdir -p "${MIGRATIONS_DIR}"
+  init_scaffold()
 fi
 
-# Start the application with the specified user permissions
-echo "Running Sonobarr..."
-exec su-exec ${PUID}:${PGID} gunicorn src.Sonobarr:app -c gunicorn_config.py
+mkdir -p "${MIGRATIONS_DIR}/versions"
+
+if [ -d "${BUNDLED_VERSIONS_DIR}" ]; then
+  echo "Syncing shipped version scripts..."
+  # Remove any stray old versions (we only keep what we ship)
+  find "${MIGRATIONS_DIR}/versions" -type f -name "*.py" -delete
+  cp -n "${BUNDLED_VERSIONS_DIR}"/*.py "${MIGRATIONS_DIR}/versions/" 2>/dev/null || true
+fi
+
+echo "Applying database migrations..."
+SONOBARR_SKIP_PROFILE_BACKFILL=1 su-exec ${PUID}:${PGID} flask db upgrade --directory "${MIGRATIONS_DIR}"
+
+echo "Starting app..."
+exec su-exec ${PUID}:${PGID} gunicorn src.Sonobarr:app -c [gunicorn_config.py](http://_vscodecontentref_/3)

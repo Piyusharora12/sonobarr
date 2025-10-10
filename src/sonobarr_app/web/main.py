@@ -22,20 +22,10 @@ def profile():
         display_name = (request.form.get("display_name") or "").strip()
         avatar_url = (request.form.get("avatar_url") or "").strip()
         lastfm_username = (request.form.get("lastfm_username") or "").strip()
-    # Linking via session key is not supported; we only use public usernames.
-        listenbrainz_username = (request.form.get("listenbrainz_username") or "").strip()
-        listenbrainz_token_raw = (request.form.get("listenbrainz_token") or "").strip()
-        listenbrainz_token_clear = request.form.get("listenbrainz_token_clear") == "on"
 
         current_user.display_name = display_name or None
         current_user.avatar_url = avatar_url or None
         current_user.lastfm_username = lastfm_username or None
-        current_user.listenbrainz_username = listenbrainz_username or None
-
-        if listenbrainz_token_clear:
-            current_user.listenbrainz_token = None
-        elif listenbrainz_token_raw:
-            current_user.listenbrainz_token = listenbrainz_token_raw
 
         new_password = request.form.get("new_password", "")
         confirm_password = request.form.get("confirm_password", "")
