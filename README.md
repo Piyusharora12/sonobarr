@@ -32,13 +32,14 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
 ## Features at a glance
 
 - 🔌 **Lidarr integration** – fetch and cache your monitored artists automatically.
-- 🔍 **Smart discovery** – query Last.fm for related artists, with dedupe and similarity scoring.
+- 🔍 **Smart discovery** – query Last.fm for related artists (both based on your current lidarr library, AI seeds and your personal LastFM suggested artists), with dedupe and similarity scoring.
 - 🤖 **AI assistant** – describe moods, genres or artists in plain English and let OpenAI pick seed artists for you.
 - 🎧 **Preview & bio panels** – jump straight into YouTube or iTunes previews and read Last.fm bios with preserved paragraph formatting.
 - 🧩 **Compact artist cards** – square artwork, button controls, and a top-right status.
 - ⚡️ **Real-time UX** – Socket.IO pushes new cards, status updates, and toast notifications instantly.
 - 👥 **Role-based access** – built-in authentication plus an admin-only settings & user management area.
 - 🔒 **Secure forms** – CSRF protection and stricter cookie settings keep sessions and admin actions safe.
+- 🛡️ **Hardened config storage** – settings are flushed via atomic writes and locked down to `0600`, keeping API keys private in shared hosts.
 - 🔔 **Update awareness** – footer badge compares your container version with the latest GitHub release.
 - 🧱 **Zero touch migrations** – database schema managed by Flask-Migrate and applied automatically on boot.
 - 🐳 **Docker-first deployment** – official image on GHCR, mountable config volume, healthy defaults.
@@ -74,9 +75,10 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
 
 > 🐳 **Requirements**: Docker Engine ≥ 24, Docker Compose plugin, Last.fm API key, Lidarr API key.
 
-1. Clone or create a working directory and move into it:
+1. Create a working directory, cd into it, and make sure it’s owned by the UID/GID the container will use (defaults to `1000:1000`). This keeps every file the container writes accessible to you:
    ```bash
-   mkdir sonobarr && cd sonobarr
+   mkdir -p sonobarr && cd sonobarr
+   sudo chown -R 1000:1000 .
    ```
 2. Download the sample configuration:
    ```bash
@@ -94,25 +96,27 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
    # openai_api_key=sk-...
    ```
    > All keys in `.env` are lowercase by convention; the app will happily accept uppercase equivalents if you prefer exporting variables.
-4. Ensure the config directory is writable by the container UID/GID (defaults to `1000:1000`). For Linux hosts:
-   ```bash
-   mkdir -p config
-   sudo chown -R 1000:1000 config
-   ````
-   > On first boot the container creates `/sonobarr/config/migrations`, seeds the database, and runs all migrations automatically.
-5. Start Sonobarr:
+4. Start Sonobarr:
    ```bash
    docker compose up -d
    ```
-6. Browse to `http://localhost:5000` (or the host behind your reverse proxy) and sign in using the super-admin credentials defined in `.env`.
+5. Browse to `http://localhost:5000` (or the host behind your reverse proxy) and sign in using the super-admin credentials defined in `.env`.
 
 ### Reverse proxy deployment
 
-The provided `docker-compose.yml` attaches Sonobarr to an external `npm_proxy` network. Adjust the network name and static IP so it fits your proxy stack (NGINX Proxy Manager, Traefik, etc.). No additional `environment:` stanza is needed - everything comes from the `.env` file referenced in `env_file`.
+The provided `docker-compose.yml` exposes port 5000. It is however a better practice to attache Sonobarr to an external network. To do so, add the network name and static IP so it fits your proxy stack (NGINX Proxy Manager, Traefik, etc.) to the docker compose file. No additional `environment:` stanza is needed - everything comes from the `.env` file referenced in `env_file`.
 
-### Running without a proxy
+For example:
+```
+...
+    networks:
+      npm_proxy:
+        ipv4_address: 192.168.97.23
 
-Expose port 5000 directly by adding `ports: - "5000:5000"` to the service while keeping the same `env_file` entry.
+networks:
+  npm_proxy:
+    external: true
+```
 
 ### Updating
 
