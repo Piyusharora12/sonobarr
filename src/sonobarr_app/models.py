@@ -38,3 +38,25 @@ class User(UserMixin, db.Model):
 
     def __repr__(self) -> str:  # pragma: no cover - representation helper
         return f"<User id={self.id} username={self.username!r} admin={self.is_admin}>"
+
+
+class ArtistRequest(db.Model):
+    __tablename__ = "artist_requests"
+
+    id = db.Column(db.Integer, primary_key=True)
+    artist_name = db.Column(db.String(255), nullable=False, index=True)
+    requested_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    status = db.Column(db.String(20), default="pending", nullable=False)  # pending, approved, rejected
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+    approved_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
+
+    # Relationships
+    requested_by = db.relationship("User", foreign_keys=[requested_by_id], backref="requested_artists")
+    approved_by = db.relationship("User", foreign_keys=[approved_by_id], backref="approved_requests")
+
+    def __repr__(self) -> str:  # pragma: no cover - representation helper
+        return f"<ArtistRequest id={self.id} artist='{self.artist_name}' status={self.status}>"
