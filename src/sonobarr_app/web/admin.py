@@ -106,19 +106,24 @@ def artist_requests():
             return redirect(url_for("admin.artist_requests"))
 
         if action == "approve":
-            # Add to Lidarr
+            # Add to Lidarr first
             data_handler = current_app.extensions.get("data_handler")
+            success = False
             if data_handler:
                 # Create a dummy session for the admin
                 admin_session = data_handler.ensure_session(f"admin_{current_user.id}", current_user.id, True)
                 # Add the artist to Lidarr
-                data_handler.add_artists(f"admin_{current_user.id}", artist_request.artist_name)
+                result_status = data_handler.add_artists(f"admin_{current_user.id}", artist_request.artist_name)
+                success = result_status == "Added"
             
-            artist_request.status = "approved"
-            artist_request.approved_by_id = current_user.id
-            artist_request.approved_at = datetime.datetime.utcnow()
-            db.session.commit()
-            flash(f"Request for '{artist_request.artist_name}' approved and added to Lidarr.", "success")
+            if success:
+                artist_request.status = "approved"
+                artist_request.approved_by_id = current_user.id
+                artist_request.approved_at = datetime.datetime.utcnow()
+                db.session.commit()
+                flash(f"Request for '{artist_request.artist_name}' approved and added to Lidarr.", "success")
+            else:
+                flash(f"Failed to add '{artist_request.artist_name}' to Lidarr. Request not approved.", "danger")
 
         elif action == "reject":
             artist_request.status = "rejected"

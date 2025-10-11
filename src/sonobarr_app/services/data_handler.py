@@ -798,7 +798,7 @@ class DataHandler:
                 session.mark_stopped()
 
     # Lidarr artist creation ------------------------------------------
-    def add_artists(self, sid: str, raw_artist_name: str) -> None:
+    def add_artists(self, sid: str, raw_artist_name: str) -> str:
         session = self.ensure_session(sid)
         artist_name = urllib.parse.unquote(raw_artist_name)
         artist_folder = artist_name.replace("/", " ")
@@ -921,6 +921,8 @@ class DataHandler:
                     self.socketio.emit("refresh_artist", item, room=sid)
                     break
 
+        return status
+
     def request_artist(self, sid: str, raw_artist_name: str) -> None:
         session = self.ensure_session(sid)
         if not session.user_id:
@@ -937,45 +939,12 @@ class DataHandler:
         artist_name = urllib.parse.unquote(raw_artist_name)
 
         try:
-            # Check if request already exists
-            existing_request = ArtistRequest.query.filter_by(
-                artist_name=artist_name,
-                requested_by_id=session.user_id,
-                status="pending",
-            ).first()
-
-            if existing_request:
-                self.socketio.emit(
-                    "new_toast_msg",
-                    {
-                        "title": "Request Already Exists",
-                        "message": f"You have already requested '{artist_name}'.",
-                    },
-                    room=sid,
-                )
-                return
-
-            # Create new request
-            request = ArtistRequest(
-                artist_name=artist_name,
-                requested_by_id=session.user_id,
-                status="pending",
-            )
-
-            db.session.add(request)
-            db.session.commit()
-
-            self.logger.info("Artist '%s' requested by user %s.", artist_name, session.user_id)
-
-            self.socketio.emit(
-                "new_toast_msg",
-                {
-                    "title": "Request Submitted",
-                    "message": f"Request for '{artist_name}' has been submitted for approval.",
-                },
-                room=sid,
-            )
-
+            if self._flask_app is not None:
+                with self._flask_app.app_context():
+                    self._request_artist_db_operations(sid, artist_name, session)
+            else:
+                # Fallback: rely on current app context if already present
+                self._request_artist_db_operations(sid, artist_name, session)
         except Exception as exc:
             self.logger.exception("Unexpected error while requesting '%s'", artist_name)
             self.socketio.emit(
@@ -993,6 +962,46 @@ class DataHandler:
                     item["Status"] = "Requested"
                     self.socketio.emit("refresh_artist", item, room=sid)
                     break
+
+    def _request_artist_db_operations(self, sid: str, artist_name: str, session) -> None:
+        # Check if request already exists
+        existing_request = ArtistRequest.query.filter_by(
+            artist_name=artist_name,
+            requested_by_id=session.user_id,
+            status="pending",
+        ).first()
+
+        if existing_request:
+            self.socketio.emit(
+                "new_toast_msg",
+                {
+                    "title": "Request Already Exists",
+                    "message": f"You have already requested '{artist_name}'.",
+                },
+                room=sid,
+            )
+            return
+
+        # Create new request
+        request = ArtistRequest(
+            artist_name=artist_name,
+            requested_by_id=session.user_id,
+            status="pending",
+        )
+
+        db.session.add(request)
+        db.session.commit()
+
+        self.logger.info("Artist '%s' requested by user %s.", artist_name, session.user_id)
+
+        self.socketio.emit(
+            "new_toast_msg",
+            {
+                "title": "Request Submitted",
+                "message": f"Request for '{artist_name}' has been submitted for approval.",
+            },
+            room=sid,
+        )
 
     # Settings --------------------------------------------------------
     def load_settings(self, sid: str) -> None:
