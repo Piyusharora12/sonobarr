@@ -37,7 +37,7 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
 - 🎧 **Preview & bio panels** – jump straight into YouTube or iTunes previews and read Last.fm bios with preserved paragraph formatting.
 - 🧩 **Compact artist cards** – square artwork, button controls, and a top-right status.
 - ⚡️ **Real-time UX** – Socket.IO pushes new cards, status updates, and toast notifications instantly.
-- 👥 **Role-based access** – built-in authentication plus an admin-only settings & user management area.
+- 👥 **Role-based access** – built-in authentication plus an admin-only settings & user management area. Non-admins can request artists, Admins can approve/deny requests.
 - 🔒 **Secure forms** – CSRF protection and stricter cookie settings keep sessions and admin actions safe.
 - 🛡️ **Hardened config storage** – settings are flushed via atomic writes and locked down to `0600`, keeping API keys private in shared hosts.
 - 🔔 **Update awareness** – footer badge compares your container version with the latest GitHub release.
