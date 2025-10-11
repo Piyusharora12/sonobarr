@@ -21,7 +21,8 @@ from thefuzz import fuzz
 from unidecode import unidecode
 
 from ..config import get_env_value
-from ..models import User
+from ..extensions import db
+from ..models import User, ArtistRequest
 from .openai_client import DEFAULT_MAX_SEED_ARTISTS, OpenAIRecommender
 from .integrations.lastfm_user import LastFmUserService
 
@@ -30,6 +31,7 @@ from .integrations.lastfm_user import LastFmUserService
 class SessionState:
     sid: str
     user_id: Optional[int]
+    is_admin: bool = False
     recommended_artists: List[dict] = field(default_factory=list)
     lidarr_items: List[dict] = field(default_factory=list)
     cleaned_lidarr_items: List[str] = field(default_factory=list)
@@ -110,14 +112,15 @@ class DataHandler:
         return value if value is not None else ""
 
     # Session helpers -------------------------------------------------
-    def ensure_session(self, sid: str, user_id: Optional[int] = None) -> SessionState:
+    def ensure_session(self, sid: str, user_id: Optional[int] = None, is_admin: bool = False) -> SessionState:
         with self.sessions_lock:
             session = self.sessions.get(sid)
             if session is None:
-                session = SessionState(sid=sid, user_id=user_id)
+                session = SessionState(sid=sid, user_id=user_id, is_admin=is_admin)
                 self.sessions[sid] = session
             elif user_id is not None:
                 session.user_id = user_id
+                session.is_admin = is_admin
             return session
 
     def get_session_if_exists(self, sid: str) -> Optional[SessionState]:
@@ -218,8 +221,10 @@ class DataHandler:
         return deduped
 
     # Socket helpers --------------------------------------------------
-    def connection(self, sid: str, user_id: Optional[int]) -> None:
-        session = self.ensure_session(sid, user_id)
+    def connection(self, sid: str, user_id: Optional[int], is_admin: bool = False) -> None:
+        session = self.ensure_session(sid, user_id, is_admin)
+        # Send user info to frontend
+        self.socketio.emit("user_info", {"is_admin": session.is_admin}, room=sid)
         if session.recommended_artists:
             self.socketio.emit("more_artists_loaded", session.recommended_artists, room=sid)
         if session.lidarr_items:
@@ -793,7 +798,7 @@ class DataHandler:
                 session.mark_stopped()
 
     # Lidarr artist creation ------------------------------------------
-    def add_artists(self, sid: str, raw_artist_name: str) -> None:
+    def add_artists(self, sid: str, raw_artist_name: str) -> str:
         session = self.ensure_session(sid)
         artist_name = urllib.parse.unquote(raw_artist_name)
         artist_folder = artist_name.replace("/", " ")
@@ -915,6 +920,88 @@ class DataHandler:
                     item["Status"] = status
                     self.socketio.emit("refresh_artist", item, room=sid)
                     break
+
+        return status
+
+    def request_artist(self, sid: str, raw_artist_name: str) -> None:
+        session = self.ensure_session(sid)
+        if not session.user_id:
+            self.socketio.emit(
+                "new_toast_msg",
+                {
+                    "title": "Authentication Error",
+                    "message": "You must be logged in to request artists.",
+                },
+                room=sid,
+            )
+            return
+        
+        artist_name = urllib.parse.unquote(raw_artist_name)
+
+        try:
+            if self._flask_app is not None:
+                with self._flask_app.app_context():
+                    self._request_artist_db_operations(sid, artist_name, session)
+            else:
+                # Fallback: rely on current app context if already present
+                self._request_artist_db_operations(sid, artist_name, session)
+        except Exception as exc:
+            self.logger.exception("Unexpected error while requesting '%s'", artist_name)
+            self.socketio.emit(
+                "new_toast_msg",
+                {
+                    "title": "Failed to Request Artist",
+                    "message": f"Error requesting '{artist_name}': {exc}",
+                },
+                room=sid,
+            )
+        finally:
+            # Update the artist status in the UI
+            for item in session.recommended_artists:
+                if item["Name"] == artist_name:
+                    item["Status"] = "Requested"
+                    self.socketio.emit("refresh_artist", item, room=sid)
+                    break
+
+    def _request_artist_db_operations(self, sid: str, artist_name: str, session) -> None:
+        # Check if request already exists
+        existing_request = ArtistRequest.query.filter_by(
+            artist_name=artist_name,
+            requested_by_id=session.user_id,
+            status="pending",
+        ).first()
+
+        if existing_request:
+            self.socketio.emit(
+                "new_toast_msg",
+                {
+                    "title": "Request Already Exists",
+                    "message": f"You have already requested '{artist_name}'.",
+                },
+                room=sid,
+            )
+            return
+
+        # Create new request
+        request = ArtistRequest(
+            artist_name=artist_name,
+            requested_by_id=session.user_id,
+            status="pending",
+        )
+
+        db.session.add(request)
+        db.session.commit()
+
+        self.logger.info("Artist '%s' requested by user %s.", artist_name, session.user_id)
+
+        self.socketio.emit(
+            "new_toast_msg",
+            {
+                "title": "Request Submitted",
+                "message": f"Request for '{artist_name}' has been submitted for approval.",
+            },
+            room=sid,
+        )
 
     # Settings --------------------------------------------------------
     def load_settings(self, sid: str) -> None:

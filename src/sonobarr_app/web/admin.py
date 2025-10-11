@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import datetime
+
 from functools import wraps
 
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from ..extensions import db
-from ..models import User
+from ..models import User, ArtistRequest
 
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -67,6 +69,9 @@ def users():
                 elif user.is_admin and User.query.filter_by(is_admin=True).count() <= 1:
                     flash("At least one administrator must remain.", "warning")
                 else:
+                    # Delete associated artist requests first
+                    ArtistRequest.query.filter_by(requested_by_id=user_id).delete()
+                    ArtistRequest.query.filter_by(approved_by_id=user_id).delete()
                     db.session.delete(user)
                     db.session.commit()
                     flash(f"User '{user.username}' deleted.", "success")
@@ -74,3 +79,81 @@ def users():
 
     users = User.query.order_by(User.username.asc()).all()
     return render_template("admin_users.html", users=users)
+
+
+@bp.route("/artist-requests", methods=["GET", "POST"])
+@login_required
+@admin_required
+def artist_requests():
+    if request.method == "POST":
+        action = request.form.get("action")
+        request_id = request.form.get("request_id")
+
+        if not request_id:
+            flash("Invalid request ID.", "danger")
+            return redirect(url_for("admin.artist_requests"))
+
+        try:
+            request_id = int(request_id)
+        except ValueError:
+            flash("Invalid request ID.", "danger")
+            return redirect(url_for("admin.artist_requests"))
+
+        artist_request = ArtistRequest.query.get(request_id)
+        if not artist_request:
+            flash("Artist request not found.", "danger")
+            return redirect(url_for("admin.artist_requests"))
+
+        if artist_request.status != "pending":
+            flash("Request has already been processed.", "warning")
+            return redirect(url_for("admin.artist_requests"))
+
+        if action == "approve":
+            # Add to Lidarr first
+            data_handler = current_app.extensions.get("data_handler")
+            success = False
+            if data_handler:
+                # Create a dummy session for the admin
+                admin_session = data_handler.ensure_session(f"admin_{current_user.id}", current_user.id, True)
+                # Add the artist to Lidarr
+                result_status = data_handler.add_artists(f"admin_{current_user.id}", artist_request.artist_name)
+                success = result_status == "Added"
+            
+            if success:
+                artist_request.status = "approved"
+                artist_request.approved_by_id = current_user.id
+                artist_request.approved_at = datetime.datetime.utcnow()
+                db.session.commit()
+                
+                # Notify all connected clients about the approval
+                approved_artist = {"Name": artist_request.artist_name, "Status": "Added"}
+                data_handler.socketio.emit("refresh_artist", approved_artist)
+                
+                flash(f"Request for '{artist_request.artist_name}' approved and added to Lidarr.", "success")
+            else:
+                flash(f"Failed to add '{artist_request.artist_name}' to Lidarr. Request not approved.", "danger")
+
+        elif action == "reject":
+            artist_request.status = "rejected"
+            artist_request.approved_by_id = current_user.id
+            artist_request.approved_at = datetime.datetime.utcnow()
+            db.session.commit()
+            
+            # Notify all connected clients about the rejection
+            data_handler = current_app.extensions.get("data_handler")
+            if data_handler:
+                # Emit refresh_artist event to all connected clients
+                rejected_artist = {"Name": artist_request.artist_name, "Status": "Rejected"}
+                data_handler.socketio.emit("refresh_artist", rejected_artist)
+            
+            flash(f"Request for '{artist_request.artist_name}' rejected.", "success")
+        else:
+            flash("Invalid action.", "danger")
+
+        return redirect(url_for("admin.artist_requests"))
+
+    # GET request - show pending requests
+    pending_requests = ArtistRequest.query.filter_by(status="pending").order_by(
+        ArtistRequest.created_at.desc()
+    ).all()
+    return render_template("admin_artist_requests.html", requests=pending_requests)

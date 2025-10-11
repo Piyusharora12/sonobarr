@@ -80,6 +80,12 @@
                     <span>User management</span>
                   </a>
                 </li>
+                <li>
+                  <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('admin.artist_requests') }}">
+                    <i class="fa-solid fa-music"></i>
+                    <span>Artist requests</span>
+                  </a>
+                </li>
                 {% if request.endpoint == 'main.home' %}
                 <li>
                   <button type="button" class="dropdown-item d-flex align-items-center gap-2" id="settings-button" data-bs-toggle="modal" data-bs-target="#config-modal">

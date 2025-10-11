@@ -1,0 +1,61 @@
+{% extends "layout.html" %}
+
+{% block title %}Artist requests · Sonobarr{% endblock %}
+{% block body_classes %}bg-body-secondary{% endblock %}
+{% block topbar_title %}Artist requests{% endblock %}
+{% block topbar_actions %}
+<a class="btn btn-outline-light btn-sm" href="{{ url_for('main.home') }}">Back to app</a>
+{% endblock %}
+
+{% block main %}
+<div class="container py-4">
+  <div class="row gy-4">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h2 class="h5 mb-3">Pending artist requests</h2>
+          {% if requests %}
+          <div class="table-responsive">
+            <table class="table align-middle">
+              <thead>
+                <tr>
+                  <th scope="col">Artist</th>
+                  <th scope="col">Requested by</th>
+                  <th scope="col">Requested at</th>
+                  <th scope="col" class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for req in requests %}
+                <tr>
+                  <td>{{ req.artist_name }}</td>
+                  <td>{{ req.requested_by.name }}</td>
+                  <td>{{ req.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                  <td class="text-end">
+                    <form method="post" class="d-inline me-2">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <input type="hidden" name="action" value="approve">
+                      <input type="hidden" name="request_id" value="{{ req.id }}">
+                      <button type="submit" class="btn btn-sm btn-success">Approve</button>
+                    </form>
+                    <form method="post" class="d-inline">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <input type="hidden" name="action" value="reject">
+                      <input type="hidden" name="request_id" value="{{ req.id }}">
+                      <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Reject request for {{ req.artist_name }}?');">Reject</button>
+                    </form>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <p class="text-muted mb-0">No pending requests.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

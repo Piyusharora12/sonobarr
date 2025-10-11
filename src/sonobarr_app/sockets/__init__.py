@@ -19,7 +19,7 @@ def register_socketio_handlers(socketio: SocketIO, data_handler) -> None:
             user_id = int(identifier) if identifier is not None else None
         except (TypeError, ValueError):
             user_id = None
-        data_handler.connection(sid, user_id)
+        data_handler.connection(sid, user_id, current_user.is_admin)
 
     @socketio.on("disconnect")
     def handle_disconnect():
@@ -104,6 +104,14 @@ def register_socketio_handlers(socketio: SocketIO, data_handler) -> None:
             return
         sid = request.sid
         socketio.start_background_task(data_handler.add_artists, sid, raw_artist_name)
+
+    @socketio.on("request_artist")
+    def handle_request_artist(raw_artist_name: str):
+        if not current_user.is_authenticated:
+            disconnect()
+            return
+        sid = request.sid
+        socketio.start_background_task(data_handler.request_artist, sid, raw_artist_name)
 
     @socketio.on("load_settings")
     def handle_load_settings():

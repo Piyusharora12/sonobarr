@@ -71,6 +71,7 @@ const ai_helper_submit = document.getElementById('ai-helper-submit');
 const ai_helper_spinner = document.getElementById('ai-helper-spinner');
 
 var lidarr_items = [];
+var is_admin = false;
 var socket = io({
 	withCredentials: true,
 });
@@ -137,6 +138,10 @@ updatePersonalButtons();
 
 socket.on('connect', function () {
 	socket.emit('personal_sources_poll');
+});
+
+socket.on('user_info', function (data) {
+	is_admin = data.is_admin || false;
 });
 
 function show_header_spinner() {
@@ -620,9 +625,19 @@ function append_artists(artists) {
 		var add_button = artist_col.querySelector('.add-to-lidarr-btn');
 		add_button.dataset.defaultText =
 			add_button.dataset.defaultText || add_button.textContent;
-		add_button.addEventListener('click', function () {
-			add_to_lidarr(artist.Name, add_button);
-		});
+
+		// Set button text and handler based on admin status
+		if (is_admin) {
+			add_button.textContent = add_button.dataset.defaultText;
+			add_button.addEventListener('click', function () {
+				add_to_lidarr(artist.Name, add_button);
+			});
+		} else {
+			add_button.textContent = 'Request';
+			add_button.addEventListener('click', function () {
+				request_artist(artist.Name, add_button);
+			});
+		}
 		artist_col
 			.querySelector('.get-preview-btn')
 			.addEventListener('click', function () {
@@ -648,9 +663,16 @@ function append_artists(artists) {
 			add_button.classList.add('btn-secondary');
 			add_button.disabled = true;
 			add_button.textContent = artist.Status;
+		} else if (artist.Status === 'Requested') {
+			statusValue = 'warning';
+			add_button.classList.remove('btn-primary');
+			add_button.classList.add('btn-warning');
+			add_button.disabled = true;
+			add_button.textContent = 'Pending Approval';
 		} else if (
 			artist.Status === 'Failed to Add' ||
-			artist.Status === 'Invalid Path'
+			artist.Status === 'Invalid Path' ||
+			artist.Status === 'Rejected'
 		) {
 			statusValue = 'danger';
 			add_button.classList.remove('btn-primary');
@@ -688,6 +710,24 @@ function add_to_lidarr(artist_name, buttonEl) {
 			buttonEl.dataset.loading = 'true';
 		}
 		socket.emit('adder', encodeURIComponent(artist_name));
+	} else {
+		show_toast('Connection Lost', 'Please reload to continue.');
+	}
+}
+
+function request_artist(artist_name, buttonEl) {
+	if (socket.connected) {
+		if (buttonEl) {
+			buttonEl.disabled = true;
+			buttonEl.innerHTML =
+				'<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Requesting...';
+			buttonEl.classList.remove('btn-primary', 'btn-danger');
+			if (!buttonEl.classList.contains('btn-secondary')) {
+				buttonEl.classList.add('btn-secondary');
+			}
+			buttonEl.dataset.loading = 'true';
+		}
+		socket.emit('request_artist', encodeURIComponent(artist_name));
 	} else {
 		show_toast('Connection Lost', 'Please reload to continue.');
 	}
@@ -1084,9 +1124,17 @@ socket.on('refresh_artist', (artist) => {
 				add_button.disabled = true;
 				add_button.innerHTML = artist.Status;
 				add_button.dataset.loading = '';
+			} else if (artist.Status === 'Requested') {
+				statusValue = 'warning';
+				add_button.classList.remove('btn-primary');
+				add_button.classList.add('btn-warning');
+				add_button.disabled = true;
+				add_button.innerHTML = 'Pending Approval';
+				add_button.dataset.loading = '';
 			} else if (
 				artist.Status === 'Failed to Add' ||
-				artist.Status === 'Invalid Path'
+				artist.Status === 'Invalid Path' ||
+				artist.Status === 'Rejected'
 			) {
 				statusValue = 'danger';
 				add_button.classList.remove('btn-primary');
