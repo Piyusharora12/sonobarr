@@ -656,17 +656,23 @@ function append_artists(artists) {
 
 		if (
 			artist.Status === 'Added' ||
-			artist.Status === 'Already in Lidarr' ||
-			artist.Status === 'Requested'
+			artist.Status === 'Already in Lidarr'
 		) {
 			statusValue = 'success';
 			add_button.classList.remove('btn-primary');
 			add_button.classList.add('btn-secondary');
 			add_button.disabled = true;
 			add_button.textContent = artist.Status;
+		} else if (artist.Status === 'Requested') {
+			statusValue = 'warning';
+			add_button.classList.remove('btn-primary');
+			add_button.classList.add('btn-warning');
+			add_button.disabled = true;
+			add_button.textContent = 'Pending Approval';
 		} else if (
 			artist.Status === 'Failed to Add' ||
-			artist.Status === 'Invalid Path'
+			artist.Status === 'Invalid Path' ||
+			artist.Status === 'Rejected'
 		) {
 			statusValue = 'danger';
 			add_button.classList.remove('btn-primary');
@@ -1110,8 +1116,7 @@ socket.on('refresh_artist', (artist) => {
 
 			if (
 				artist.Status === 'Added' ||
-				artist.Status === 'Already in Lidarr' ||
-				artist.Status === 'Requested'
+				artist.Status === 'Already in Lidarr'
 			) {
 				statusValue = 'success';
 				add_button.classList.remove('btn-primary');
@@ -1119,9 +1124,17 @@ socket.on('refresh_artist', (artist) => {
 				add_button.disabled = true;
 				add_button.innerHTML = artist.Status;
 				add_button.dataset.loading = '';
+			} else if (artist.Status === 'Requested') {
+				statusValue = 'warning';
+				add_button.classList.remove('btn-primary');
+				add_button.classList.add('btn-warning');
+				add_button.disabled = true;
+				add_button.innerHTML = 'Pending Approval';
+				add_button.dataset.loading = '';
 			} else if (
 				artist.Status === 'Failed to Add' ||
-				artist.Status === 'Invalid Path'
+				artist.Status === 'Invalid Path' ||
+				artist.Status === 'Rejected'
 			) {
 				statusValue = 'danger';
 				add_button.classList.remove('btn-primary');

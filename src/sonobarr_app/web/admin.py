@@ -128,8 +128,16 @@ def artist_requests():
         elif action == "reject":
             artist_request.status = "rejected"
             artist_request.approved_by_id = current_user.id
-            artist_request.approved_at = datetime.utcnow()
+            artist_request.approved_at = datetime.datetime.utcnow()
             db.session.commit()
+            
+            # Notify all connected clients about the rejection
+            data_handler = current_app.extensions.get("data_handler")
+            if data_handler:
+                # Emit refresh_artist event to all connected clients
+                rejected_artist = {"Name": artist_request.artist_name, "Status": "Rejected"}
+                data_handler.socketio.emit("refresh_artist", rejected_artist)
+            
             flash(f"Request for '{artist_request.artist_name}' rejected.", "success")
         else:
             flash("Invalid action.", "danger")
