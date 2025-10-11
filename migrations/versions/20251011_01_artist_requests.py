@@ -36,10 +36,12 @@ def upgrade():
             sa.ForeignKeyConstraint(
                 ["approved_by_id"],
                 ["users.id"],
+                ondelete="SET NULL",
             ),
             sa.ForeignKeyConstraint(
                 ["requested_by_id"],
                 ["users.id"],
+                ondelete="CASCADE",
             ),
             sa.PrimaryKeyConstraint("id"),
         )

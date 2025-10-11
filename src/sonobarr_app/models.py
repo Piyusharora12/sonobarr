@@ -45,13 +45,13 @@ class ArtistRequest(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     artist_name = db.Column(db.String(255), nullable=False, index=True)
-    requested_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    requested_by_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     status = db.Column(db.String(20), default="pending", nullable=False)  # pending, approved, rejected
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
-    approved_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    approved_by_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     approved_at = db.Column(db.DateTime, nullable=True)
 
     # Relationships

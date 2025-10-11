@@ -69,6 +69,9 @@ def users():
                 elif user.is_admin and User.query.filter_by(is_admin=True).count() <= 1:
                     flash("At least one administrator must remain.", "warning")
                 else:
+                    # Delete associated artist requests first
+                    ArtistRequest.query.filter_by(requested_by_id=user_id).delete()
+                    ArtistRequest.query.filter_by(approved_by_id=user_id).delete()
                     db.session.delete(user)
                     db.session.commit()
                     flash(f"User '{user.username}' deleted.", "success")
