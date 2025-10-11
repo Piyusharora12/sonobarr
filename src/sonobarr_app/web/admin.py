@@ -121,6 +121,11 @@ def artist_requests():
                 artist_request.approved_by_id = current_user.id
                 artist_request.approved_at = datetime.datetime.utcnow()
                 db.session.commit()
+                
+                # Notify all connected clients about the approval
+                approved_artist = {"Name": artist_request.artist_name, "Status": "Added"}
+                data_handler.socketio.emit("refresh_artist", approved_artist)
+                
                 flash(f"Request for '{artist_request.artist_name}' approved and added to Lidarr.", "success")
             else:
                 flash(f"Failed to add '{artist_request.artist_name}' to Lidarr. Request not approved.", "danger")
