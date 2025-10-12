@@ -14,7 +14,7 @@ from .extensions import csrf, db, login_manager, migrate, socketio
 from .services.data_handler import DataHandler
 from .services.releases import ReleaseClient
 from .sockets import register_socketio_handlers
-from .web import admin_bp, auth_bp, main_bp
+from .web import admin_bp, api_bp, auth_bp, main_bp
 
 
 def create_app(config_class: type[Config] = Config) -> Flask:
@@ -106,9 +106,10 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         }
 
     # Blueprints ------------------------------------------------------
-    app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
+    app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(api_bp)
 
     # Socket.IO -------------------------------------------------------
     register_socketio_handlers(socketio, data_handler)
