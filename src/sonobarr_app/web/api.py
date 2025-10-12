@@ -13,7 +13,15 @@ bp = Blueprint("api", __name__, url_prefix="/api")
 def api_key_required(view):
     """Decorator to require API key for API endpoints."""
     def wrapped(*args, **kwargs):
-        api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
+        # Get API key from headers (case-insensitive) or query params
+        api_key = None
+        for header_name in request.headers:
+            if header_name.lower() == 'x-api-key':
+                api_key = request.headers[header_name]
+                break
+        if not api_key:
+            api_key = request.args.get('api_key')
+        
         configured_key = current_app.config.get('API_KEY')
         
         if configured_key and api_key != configured_key:
