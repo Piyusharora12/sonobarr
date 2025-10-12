@@ -13,20 +13,26 @@ bp = Blueprint("api", __name__, url_prefix="/api")
 def api_key_required(view):
     """Decorator to require API key for API endpoints."""
     def wrapped(*args, **kwargs):
-        # Get API key from headers (case-insensitive) or query params
-        api_key = None
-        for header_name in request.headers:
-            if header_name.lower() == 'x-api-key':
-                api_key = request.headers[header_name]
-                break
-        if not api_key:
-            api_key = request.args.get('api_key')
-        
-        configured_key = current_app.config.get('API_KEY')
-        
-        if configured_key and api_key != configured_key:
-            return jsonify({"error": "Invalid API key"}), 401
-        
+        # Extract API key from headers or query params
+        api_key = request.headers.get("X-API-Key")
+        if api_key is None:
+            api_key = request.headers.get("X-Api-Key")
+        if api_key is None:
+            api_key = request.args.get("api_key") or request.args.get("key")
+        if api_key is not None:
+            api_key = str(api_key).strip()
+
+        configured_key = current_app.config.get("API_KEY")
+        if not configured_key:
+            data_handler = current_app.extensions.get("data_handler")
+            if data_handler is not None:
+                configured_key = getattr(data_handler, "api_key", None)
+
+        if configured_key:
+            configured_key = str(configured_key).strip()
+            if configured_key and api_key != configured_key:
+                return jsonify({"error": "Invalid API key"}), 401
+
         return view(*args, **kwargs)
     wrapped.__name__ = view.__name__
     return wrapped
