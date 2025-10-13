@@ -178,6 +178,11 @@ def _ensure_user_profile_columns(logger: logging.Logger) -> None:
     alter_statements: list[tuple[str, str]] = []
     if "lastfm_username" not in user_columns:
         alter_statements.append(("lastfm_username", "ALTER TABLE users ADD COLUMN lastfm_username VARCHAR(120)"))
+    if "listenbrainz_username" not in user_columns:
+        alter_statements.append((
+            "listenbrainz_username",
+            "ALTER TABLE users ADD COLUMN listenbrainz_username VARCHAR(120)",
+        ))
 
     for column_name, statement in alter_statements:
         try:
