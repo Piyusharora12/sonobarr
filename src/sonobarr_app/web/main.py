@@ -19,10 +19,12 @@ def _update_user_profile(form_data, user):
     display_name = (form_data.get("display_name") or "").strip()
     avatar_url = (form_data.get("avatar_url") or "").strip()
     lastfm_username = (form_data.get("lastfm_username") or "").strip()
+    listenbrainz_username = (form_data.get("listenbrainz_username") or "").strip()
 
     user.display_name = display_name or None
     user.avatar_url = avatar_url or None
     user.lastfm_username = lastfm_username or None
+    user.listenbrainz_username = listenbrainz_username or None
 
     new_password = form_data.get("new_password", "")
     confirm_password = form_data.get("confirm_password", "")

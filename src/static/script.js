@@ -50,6 +50,16 @@ const search_for_missing_albums_checkbox = document.getElementById(
 const dry_run_adding_to_lidarr_checkbox = document.getElementById(
 	'dry-run-adding-to-lidarr'
 );
+const lidarr_monitor_option_select = document.getElementById(
+	'lidarr-monitor-option'
+);
+const lidarr_monitor_new_items_select = document.getElementById(
+	'lidarr-monitor-new-items'
+);
+const lidarr_monitored_checkbox = document.getElementById('lidarr-monitored');
+const lidarr_albums_to_monitor_input = document.getElementById(
+	'lidarr-albums-to-monitor'
+);
 const auto_start_checkbox = document.getElementById('auto-start');
 const auto_start_delay_input = document.getElementById('auto-start-delay');
 const last_fm_api_key_input = document.getElementById('last-fm-api-key');
@@ -61,6 +71,54 @@ const personalLastfmSpinner = document.getElementById(
 	'personal-lastfm-spinner'
 );
 const personalLastfmHint = document.getElementById('personal-lastfm-hint');
+const personalListenbrainzButton = document.getElementById(
+	'personal-listenbrainz-button'
+);
+const personalListenbrainzSpinner = document.getElementById(
+	'personal-listenbrainz-spinner'
+);
+const personalListenbrainzHint = document.getElementById(
+	'personal-listenbrainz-hint'
+);
+
+const personalDiscoveryServices = {
+	lastfm: {
+		label: 'Last.fm',
+		button: personalLastfmButton,
+		spinner: personalLastfmSpinner,
+		hint: personalLastfmHint,
+		readyTitle: 'Stream recommendations from your Last.fm profile.',
+		readyHint: 'Ready to use your Last.fm listening history.',
+	},
+	listenbrainz: {
+		label: 'ListenBrainz',
+		button: personalListenbrainzButton,
+		spinner: personalListenbrainzSpinner,
+		hint: personalListenbrainzHint,
+		readyTitle: 'Stream ListenBrainz weekly exploration picks.',
+		readyHint: 'Ready to use ListenBrainz weekly exploration.',
+	},
+};
+
+function getPersonalServiceLabel(source) {
+	if (!source) {
+		return 'Personal discovery';
+	}
+	var controls = personalDiscoveryServices[source];
+	if (controls && controls.label) {
+		return controls.label;
+	}
+	var fallback = String(source).replace(/[_-]+/g, ' ').trim();
+	if (!fallback) {
+		return 'Personal discovery';
+	}
+	return fallback.charAt(0).toUpperCase() + fallback.slice(1);
+}
+
+function getPersonalServiceTitle(source) {
+	var label = getPersonalServiceLabel(source);
+	return label === 'Personal discovery' ? label : label + ' discovery';
+}
 
 const ai_assist_button = document.getElementById('ai-assist-button');
 const ai_helper_modal = document.getElementById('ai-helper-modal');
@@ -132,6 +190,12 @@ if (ai_helper_form) {
 if (personalLastfmButton) {
 	personalLastfmButton.addEventListener('click', function () {
 		startPersonalDiscovery('lastfm');
+	});
+}
+
+if (personalListenbrainzButton) {
+	personalListenbrainzButton.addEventListener('click', function () {
+		startPersonalDiscovery('listenbrainz');
 	});
 }
 
@@ -284,57 +348,77 @@ function set_hint_text(element, message) {
 
 function updatePersonalButtons() {
 	var state = personalSourcesState || {};
-	var lastfm = state.lastfm || null;
-	if (personalLastfmButton) {
-		var lastfmReady = !!(lastfm && lastfm.enabled);
-		var loading = personalDiscoveryState.inFlight;
-		var lastfmTitle = 'Stream recommendations from your Last.fm profile.';
-		if (!lastfm) {
-			personalLastfmButton.disabled = true;
-			lastfmTitle = 'Loading Last.fm availability…';
-			set_hint_text(personalLastfmHint, '');
-		} else {
-			personalLastfmButton.disabled = !lastfmReady || loading;
-			if (lastfmReady) {
-				var readyMessage = '';
-				if (lastfm.username) {
-					readyMessage =
-						'Ready with Last.fm profile ' + lastfm.username + '.';
-				} else {
-					readyMessage =
-						'Ready to use your Last.fm listening history.';
-				}
-				set_hint_text(personalLastfmHint, readyMessage);
-			} else {
-				set_hint_text(
-					personalLastfmHint,
-					lastfm.reason || 'Last.fm configuration is incomplete.'
-				);
-				lastfmTitle = lastfm.reason || lastfmTitle;
-			}
+	var isBusy = personalDiscoveryState.inFlight;
+	Object.keys(personalDiscoveryServices).forEach(function (source) {
+		var controls = personalDiscoveryServices[source];
+		if (!controls || !controls.button) {
+			return;
 		}
-		personalLastfmButton.title = lastfmTitle;
-	}
+		var button = controls.button;
+		var serviceState = state[source] || null;
+		if (!serviceState) {
+			button.disabled = true;
+			button.title = 'Loading availability...';
+			set_hint_text(controls.hint, '');
+			return;
+		}
+		var label = getPersonalServiceLabel(source);
+		var enabled = !!serviceState.enabled;
+		var loading = isBusy && personalDiscoveryState.source === source;
+		var readyTitle =
+			controls.readyTitle || 'Stream personalised recommendations.';
+		if (loading) {
+			button.title = 'Personal discovery in progress...';
+		} else if (enabled) {
+			button.title = readyTitle;
+		} else {
+			button.title = serviceState.reason || readyTitle;
+		}
+		button.disabled = !enabled || isBusy;
+		if (enabled) {
+			var readyMessage = '';
+			if (serviceState.username) {
+				readyMessage =
+					'Ready with ' +
+					label +
+					' profile ' +
+					serviceState.username +
+					'.';
+			} else if (controls.readyHint) {
+				readyMessage = controls.readyHint;
+			} else {
+				readyMessage =
+					'Ready to use your ' +
+					label.toLowerCase() +
+					' listening history.';
+			}
+			set_hint_text(controls.hint, readyMessage);
+		} else {
+			set_hint_text(controls.hint, serviceState.reason || '');
+		}
+	});
 }
 
 function setPersonalDiscoveryLoading(source, isLoading) {
-	var targetSource = source;
-	if (!isLoading) {
-		targetSource = personalDiscoveryState.source;
-	}
+	var previousSource = personalDiscoveryState.source;
 	personalDiscoveryState.inFlight = !!isLoading;
 	personalDiscoveryState.source = isLoading ? source : null;
-	if (personalLastfmSpinner) {
-		personalLastfmSpinner.classList.toggle(
-			'd-none',
-			!(personalDiscoveryState.inFlight && targetSource === 'lastfm')
-		);
-	}
-	if (isLoading) {
-		if (source === 'lastfm' && personalLastfmButton) {
-			personalLastfmButton.blur();
+	var activeSource = isLoading ? source : previousSource;
+	Object.keys(personalDiscoveryServices).forEach(function (name) {
+		var controls = personalDiscoveryServices[name];
+		if (!controls) {
+			return;
 		}
-	}
+		if (controls.spinner) {
+			controls.spinner.classList.toggle(
+				'd-none',
+				!(personalDiscoveryState.inFlight && activeSource === name)
+			);
+		}
+		if (isLoading && name === source && controls.button) {
+			controls.button.blur();
+		}
+	});
 	updatePersonalButtons();
 }
 
@@ -352,10 +436,10 @@ function startPersonalDiscovery(source) {
 		return;
 	}
 	var sourceState = personalSourcesState[source];
+	var label = getPersonalServiceLabel(source);
 	if (!sourceState || !sourceState.enabled) {
 		var reason = sourceState && sourceState.reason;
-		var serviceTitle =
-			source === 'lastfm' ? 'Last.fm discovery' : 'Personal discovery';
+		var serviceTitle = getPersonalServiceTitle(source);
 		show_toast(
 			serviceTitle,
 			reason ||
@@ -862,6 +946,18 @@ function build_settings_payload() {
 		dry_run_adding_to_lidarr: dry_run_adding_to_lidarr_checkbox
 			? dry_run_adding_to_lidarr_checkbox.checked
 			: false,
+		lidarr_monitor_option: lidarr_monitor_option_select
+			? lidarr_monitor_option_select.value
+			: '',
+		lidarr_monitor_new_items: lidarr_monitor_new_items_select
+			? lidarr_monitor_new_items_select.value
+			: '',
+		lidarr_monitored: lidarr_monitored_checkbox
+			? lidarr_monitored_checkbox.checked
+			: true,
+		lidarr_albums_to_monitor: lidarr_albums_to_monitor_input
+			? lidarr_albums_to_monitor_input.value
+			: '',
 		auto_start: auto_start_checkbox ? auto_start_checkbox.checked : false,
 		auto_start_delay: auto_start_delay_input
 			? auto_start_delay_input.value
@@ -925,6 +1021,25 @@ function populate_settings_form(settings) {
 		dry_run_adding_to_lidarr_checkbox.checked = Boolean(
 			settings.dry_run_adding_to_lidarr
 		);
+	}
+	if (lidarr_monitor_option_select) {
+		lidarr_monitor_option_select.value =
+			settings.lidarr_monitor_option || '';
+	}
+	if (lidarr_monitor_new_items_select) {
+		lidarr_monitor_new_items_select.value =
+			settings.lidarr_monitor_new_items || '';
+	}
+	if (lidarr_monitored_checkbox) {
+		if (typeof settings.lidarr_monitored === 'boolean') {
+			lidarr_monitored_checkbox.checked = settings.lidarr_monitored;
+		} else {
+			lidarr_monitored_checkbox.checked = true;
+		}
+	}
+	if (lidarr_albums_to_monitor_input) {
+		lidarr_albums_to_monitor_input.value =
+			settings.lidarr_albums_to_monitor || '';
 	}
 	if (similar_artist_batch_size_input) {
 		const batchSize = settings.similar_artist_batch_size;
@@ -1217,8 +1332,7 @@ socket.on('user_recs_ack', function (payload) {
 		payload && payload.source ? String(payload.source).toLowerCase() : '';
 	var username = payload && payload.username ? payload.username : '';
 	var seeds = payload && Array.isArray(payload.seeds) ? payload.seeds : [];
-	var title =
-		source === 'lastfm' ? 'Last.fm discovery' : 'Personal discovery';
+	var title = getPersonalServiceTitle(source);
 	var message = '';
 	if (seeds.length > 0) {
 		message = 'Streaming ' + seeds.length + ' picks';
@@ -1241,8 +1355,7 @@ socket.on('user_recs_error', function (payload) {
 			: 'We could not fetch your personal recommendations right now.';
 	hide_header_spinner();
 	setPersonalDiscoveryLoading(null, false);
-	var title =
-		source === 'lastfm' ? 'Last.fm discovery' : 'Personal discovery';
+	var title = getPersonalServiceTitle(source);
 	show_toast(title, message);
 });
 

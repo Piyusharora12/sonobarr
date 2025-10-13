@@ -89,6 +89,44 @@
               <input class="form-check-input" type="checkbox" id="dry-run-adding-to-lidarr">
               <label class="form-check-label" for="dry-run-adding-to-lidarr">Dry run additions (don't call Lidarr)</label>
             </div>
+            <div class="row g-3 my-3">
+              <div class="col">
+                <div class="form-group-modal">
+                  <label for="lidarr-monitor-option">Monitor Strategy</label>
+                  <select class="form-select" id="lidarr-monitor-option">
+                    <option value="">Use Lidarr default</option>
+                    <option value="all">All</option>
+                    <option value="future">Future</option>
+                    <option value="missing">Missing</option>
+                    <option value="existing">Existing</option>
+                    <option value="latest">Latest</option>
+                    <option value="first">First</option>
+                    <option value="none">None</option>
+                    <option value="unknown">Unknown</option>
+                  </select>
+                </div>
+              </div>
+              <div class="col">
+                <div class="form-group-modal">
+                  <label for="lidarr-monitor-new-items">Monitor New Items</label>
+                  <select class="form-select" id="lidarr-monitor-new-items">
+                    <option value="">Use Lidarr default</option>
+                    <option value="all">All</option>
+                    <option value="new">New</option>
+                    <option value="none">None</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="form-check form-switch my-2">
+              <input class="form-check-input" type="checkbox" id="lidarr-monitored">
+              <label class="form-check-label" for="lidarr-monitored">Mark newly added artists as monitored</label>
+            </div>
+            <div class="form-group-modal my-3">
+              <label for="lidarr-albums-to-monitor">Albums to Monitor (optional)</label>
+              <textarea class="form-control" id="lidarr-albums-to-monitor" rows="2" placeholder="One album ID per line"></textarea>
+              <small class="form-text text-muted">Leave blank to let Lidarr decide which albums to monitor.</small>
+            </div>
 
             <hr class="my-4">
 
@@ -191,6 +229,14 @@
               <span>Last.fm for me</span>
             </button>
             <div class="small text-secondary d-none" id="personal-lastfm-hint"></div>
+          </div>
+          <div class="d-flex flex-column gap-1">
+            <button class="btn btn-outline-success w-100 d-flex align-items-center justify-content-center gap-2" id="personal-listenbrainz-button" type="button" disabled>
+              <span class="spinner-border spinner-border-sm d-none" id="personal-listenbrainz-spinner" role="status" aria-hidden="true"></span>
+              <i class="fa fa-headphones"></i>
+              <span>ListenBrainz for me</span>
+            </button>
+            <div class="small text-secondary d-none" id="personal-listenbrainz-hint"></div>
           </div>
         </div>
       </section>
