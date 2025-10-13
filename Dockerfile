@@ -4,7 +4,9 @@ ARG RELEASE_VERSION
 ENV RELEASE_VERSION=${RELEASE_VERSION}
 ENV PYTHONPATH="/sonobarr/src"
 
-RUN apk update && apk add --no-cache su-exec
+RUN apk update && apk add --no-cache su-exec \
+	&& addgroup -S -g 1000 sonobarr \
+	&& adduser -S -G sonobarr -u 1000 sonobarr
 
 # Copy only requirements first
 COPY requirements.txt /sonobarr/
@@ -20,6 +22,10 @@ COPY migrations/ /sonobarr/migrations/
 COPY gunicorn_config.py /sonobarr/
 COPY init.sh /sonobarr/
 
-RUN chmod +x init.sh
+RUN chmod 755 init.sh \
+	&& mkdir -p /sonobarr/config \
+	&& chown -R sonobarr:sonobarr /sonobarr/config
+
+USER sonobarr
 
 ENTRYPOINT ["./init.sh"]

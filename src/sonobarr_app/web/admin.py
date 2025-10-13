@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import datetime
+from datetime import datetime, timezone
 
 from functools import wraps
 
@@ -24,136 +24,165 @@ def admin_required(view):
     return wrapped
 
 
-@bp.route("/users", methods=["GET", "POST"])
+def _create_user_from_form(form):
+    username = (form.get("username") or "").strip()
+    password = form.get("password") or ""
+    confirm_password = (form.get("confirm_password") or "").strip()
+    display_name = (form.get("display_name") or "").strip()
+    avatar_url = (form.get("avatar_url") or "").strip()
+    is_admin = form.get("is_admin") == "on"
+
+    if not username or not password:
+        flash("Username and password are required.", "danger")
+        return
+    if password != confirm_password:
+        flash("Password confirmation does not match.", "danger")
+        return
+    if User.query.filter_by(username=username).first():
+        flash("Username already exists.", "danger")
+        return
+
+    user = User(
+        username=username,
+        display_name=display_name or None,
+        avatar_url=avatar_url or None,
+        is_admin=is_admin,
+    )
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+    flash(f"User '{username}' created.", "success")
+
+
+def _delete_user_from_form(form):
+    try:
+        user_id = int(form.get("user_id", "0"))
+    except ValueError:
+        flash("Invalid user id.", "danger")
+        return
+
+    user = User.query.get(user_id)
+    if not user:
+        flash("User not found.", "danger")
+        return
+    if user.id == current_user.id:
+        flash("You cannot delete your own account.", "warning")
+        return
+    if user.is_admin and User.query.filter_by(is_admin=True).count() <= 1:
+        flash("At least one administrator must remain.", "warning")
+        return
+
+    # Delete associated artist requests first
+    ArtistRequest.query.filter_by(requested_by_id=user_id).delete()
+    ArtistRequest.query.filter_by(approved_by_id=user_id).delete()
+    db.session.delete(user)
+    db.session.commit()
+    flash(f"User '{user.username}' deleted.", "success")
+
+
+def _resolve_artist_request(form):
+    request_id = form.get("request_id")
+    if not request_id:
+        flash("Invalid request ID.", "danger")
+        return None
+    try:
+        request_id_int = int(request_id)
+    except ValueError:
+        flash("Invalid request ID.", "danger")
+        return None
+
+    artist_request = ArtistRequest.query.get(request_id_int)
+    if not artist_request:
+        flash("Artist request not found.", "danger")
+        return None
+    if artist_request.status != "pending":
+        flash("Request has already been processed.", "warning")
+        return None
+    return artist_request
+
+
+def _approve_artist_request(artist_request: ArtistRequest):
+    data_handler = current_app.extensions.get("data_handler")
+    if not data_handler:
+        flash(f"Failed to add '{artist_request.artist_name}' to Lidarr. Request not approved.", "danger")
+        return
+
+    session_key = f"admin_{current_user.id}"
+    data_handler.ensure_session(session_key, current_user.id, True)
+    result_status = data_handler.add_artists(session_key, artist_request.artist_name)
+    if result_status != "Added":
+        flash(f"Failed to add '{artist_request.artist_name}' to Lidarr. Request not approved.", "danger")
+        return
+
+    artist_request.status = "approved"
+    artist_request.approved_by_id = current_user.id
+    artist_request.approved_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    approved_artist = {"Name": artist_request.artist_name, "Status": "Added"}
+    data_handler.socketio.emit("refresh_artist", approved_artist)
+    flash(f"Request for '{artist_request.artist_name}' approved and added to Lidarr.", "success")
+
+
+def _reject_artist_request(artist_request: ArtistRequest):
+    artist_request.status = "rejected"
+    artist_request.approved_by_id = current_user.id
+    artist_request.approved_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    data_handler = current_app.extensions.get("data_handler")
+    if data_handler:
+        rejected_artist = {"Name": artist_request.artist_name, "Status": "Rejected"}
+        data_handler.socketio.emit("refresh_artist", rejected_artist)
+    flash(f"Request for '{artist_request.artist_name}' rejected.", "success")
+
+
+@bp.get("/users")
 @login_required
 @admin_required
 def users():
-    if request.method == "POST":
-        action = request.form.get("action")
-        if action == "create":
-            username = (request.form.get("username") or "").strip()
-            password = request.form.get("password") or ""
-            confirm_password = (request.form.get("confirm_password") or "").strip()
-            display_name = (request.form.get("display_name") or "").strip()
-            avatar_url = (request.form.get("avatar_url") or "").strip()
-            is_admin = request.form.get("is_admin") == "on"
-
-            if not username or not password:
-                flash("Username and password are required.", "danger")
-            elif password != confirm_password:
-                flash("Password confirmation does not match.", "danger")
-            elif User.query.filter_by(username=username).first():
-                flash("Username already exists.", "danger")
-            else:
-                user = User(
-                    username=username,
-                    display_name=display_name or None,
-                    avatar_url=avatar_url or None,
-                    is_admin=is_admin,
-                )
-                user.set_password(password)
-                db.session.add(user)
-                db.session.commit()
-                flash(f"User '{username}' created.", "success")
-        elif action == "delete":
-            try:
-                user_id = int(request.form.get("user_id", "0"))
-            except ValueError:
-                flash("Invalid user id.", "danger")
-            else:
-                user = User.query.get(user_id)
-                if not user:
-                    flash("User not found.", "danger")
-                elif user.id == current_user.id:
-                    flash("You cannot delete your own account.", "warning")
-                elif user.is_admin and User.query.filter_by(is_admin=True).count() <= 1:
-                    flash("At least one administrator must remain.", "warning")
-                else:
-                    # Delete associated artist requests first
-                    ArtistRequest.query.filter_by(requested_by_id=user_id).delete()
-                    ArtistRequest.query.filter_by(approved_by_id=user_id).delete()
-                    db.session.delete(user)
-                    db.session.commit()
-                    flash(f"User '{user.username}' deleted.", "success")
-        return redirect(url_for("admin.users"))
-
-    users = User.query.order_by(User.username.asc()).all()
-    return render_template("admin_users.html", users=users)
+    users_list = User.query.order_by(User.username.asc()).all()
+    return render_template("admin_users.html", users=users_list)
 
 
-@bp.route("/artist-requests", methods=["GET", "POST"])
+@bp.post("/users")
+@login_required
+@admin_required
+def modify_users():
+    action = request.form.get("action")
+    if action == "create":
+        _create_user_from_form(request.form)
+    elif action == "delete":
+        _delete_user_from_form(request.form)
+    else:
+        flash("Invalid action.", "danger")
+    return redirect(url_for("admin.users"))
+
+
+@bp.get("/artist-requests")
 @login_required
 @admin_required
 def artist_requests():
-    if request.method == "POST":
-        action = request.form.get("action")
-        request_id = request.form.get("request_id")
-
-        if not request_id:
-            flash("Invalid request ID.", "danger")
-            return redirect(url_for("admin.artist_requests"))
-
-        try:
-            request_id = int(request_id)
-        except ValueError:
-            flash("Invalid request ID.", "danger")
-            return redirect(url_for("admin.artist_requests"))
-
-        artist_request = ArtistRequest.query.get(request_id)
-        if not artist_request:
-            flash("Artist request not found.", "danger")
-            return redirect(url_for("admin.artist_requests"))
-
-        if artist_request.status != "pending":
-            flash("Request has already been processed.", "warning")
-            return redirect(url_for("admin.artist_requests"))
-
-        if action == "approve":
-            # Add to Lidarr first
-            data_handler = current_app.extensions.get("data_handler")
-            success = False
-            if data_handler:
-                # Create a dummy session for the admin
-                admin_session = data_handler.ensure_session(f"admin_{current_user.id}", current_user.id, True)
-                # Add the artist to Lidarr
-                result_status = data_handler.add_artists(f"admin_{current_user.id}", artist_request.artist_name)
-                success = result_status == "Added"
-            
-            if success:
-                artist_request.status = "approved"
-                artist_request.approved_by_id = current_user.id
-                artist_request.approved_at = datetime.datetime.utcnow()
-                db.session.commit()
-                
-                # Notify all connected clients about the approval
-                approved_artist = {"Name": artist_request.artist_name, "Status": "Added"}
-                data_handler.socketio.emit("refresh_artist", approved_artist)
-                
-                flash(f"Request for '{artist_request.artist_name}' approved and added to Lidarr.", "success")
-            else:
-                flash(f"Failed to add '{artist_request.artist_name}' to Lidarr. Request not approved.", "danger")
-
-        elif action == "reject":
-            artist_request.status = "rejected"
-            artist_request.approved_by_id = current_user.id
-            artist_request.approved_at = datetime.datetime.utcnow()
-            db.session.commit()
-            
-            # Notify all connected clients about the rejection
-            data_handler = current_app.extensions.get("data_handler")
-            if data_handler:
-                # Emit refresh_artist event to all connected clients
-                rejected_artist = {"Name": artist_request.artist_name, "Status": "Rejected"}
-                data_handler.socketio.emit("refresh_artist", rejected_artist)
-            
-            flash(f"Request for '{artist_request.artist_name}' rejected.", "success")
-        else:
-            flash("Invalid action.", "danger")
-
-        return redirect(url_for("admin.artist_requests"))
-
-    # GET request - show pending requests
     pending_requests = ArtistRequest.query.filter_by(status="pending").order_by(
         ArtistRequest.created_at.desc()
     ).all()
     return render_template("admin_artist_requests.html", requests=pending_requests)
+
+
+@bp.post("/artist-requests")
+@login_required
+@admin_required
+def modify_artist_requests():
+    action = request.form.get("action")
+    artist_request = _resolve_artist_request(request.form)
+    if not artist_request:
+        return redirect(url_for("admin.artist_requests"))
+
+    if action == "approve":
+        _approve_artist_request(artist_request)
+    elif action == "reject":
+        _reject_artist_request(artist_request)
+    else:
+        flash("Invalid action.", "danger")
+
+    return redirect(url_for("admin.artist_requests"))
