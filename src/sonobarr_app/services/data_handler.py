@@ -25,6 +25,10 @@ from ..extensions import db
 from ..models import User, ArtistRequest
 from .openai_client import DEFAULT_MAX_SEED_ARTISTS, OpenAIRecommender
 from .integrations.lastfm_user import LastFmUserService
+from .integrations.listenbrainz_user import (
+    ListenBrainzIntegrationError,
+    ListenBrainzUserService,
+)
 
 LIDARR_MONITOR_TYPES = {
     "all",
@@ -121,6 +125,7 @@ class DataHandler:
         self.lidarr_monitor_new_items = ""
         self.openai_recommender: Optional[OpenAIRecommender] = None
         self.last_fm_user_service: Optional[LastFmUserService] = None
+        self.listenbrainz_user_service = ListenBrainzUserService()
 
         self.load_environ_or_config_settings()
 
@@ -332,6 +337,22 @@ class DataHandler:
                 "reason": lastfm_reason,
                 "configured": lastfm_service_ready,
             },
+        }
+
+        listenbrainz_service_ready = self.listenbrainz_user_service is not None
+        listenbrainz_username = user.listenbrainz_username if user else None
+        if not listenbrainz_service_ready:
+            listenbrainz_reason = "ListenBrainz integration is unavailable right now."
+        elif not listenbrainz_username:
+            listenbrainz_reason = "Add your ListenBrainz username in Profile → Listening services."
+        else:
+            listenbrainz_reason = None
+
+        state["listenbrainz"] = {
+            "enabled": bool(listenbrainz_service_ready and listenbrainz_username),
+            "username": listenbrainz_username,
+            "reason": listenbrainz_reason,
+            "configured": listenbrainz_service_ready,
         }
 
         self.socketio.emit("personal_sources_state", state, room=sid)
@@ -632,10 +653,56 @@ class DataHandler:
         if not success:
             return
 
+    def _fetch_lastfm_personal_artists(self, username: str) -> List[str]:
+        if not self.last_fm_user_service:
+            return []
+        recommendations = self.last_fm_user_service.get_recommended_artists(username, limit=50)
+        if not recommendations:
+            recommendations = self.last_fm_user_service.get_top_artists(username, limit=50)
+        return [artist.name for artist in recommendations if getattr(artist, "name", None)]
+
+    def _fetch_listenbrainz_personal_artists(self, username: str) -> List[str]:
+        if not self.listenbrainz_user_service:
+            return []
+        playlist_artists = self.listenbrainz_user_service.get_weekly_exploration_artists(username)
+        names = playlist_artists.artists if playlist_artists else []
+        return [name for name in names if name]
+
     def personal_recommendations(self, sid: str, source: str) -> None:
         session = self.ensure_session(sid)
         source_key = (source or "").strip().lower() or "lastfm"
-        if source_key != "lastfm":
+
+        source_definitions = {
+            "lastfm": {
+                "label": "Last.fm",
+                "title": "Last.fm discovery",
+                "username_attr": "lastfm_username",
+                "service_ready": bool(self.last_fm_user_service),
+                "service_missing_reason": (
+                    "Administrator must configure a Last.fm API key and secret in Settings before this feature can be used."
+                ),
+                "missing_username_reason": (
+                    "Add your Last.fm username under Profile → Listening services to use this feature."
+                ),
+                "fetch": self._fetch_lastfm_personal_artists,
+                "error_message": "We couldn't reach Last.fm right now. Please try again shortly.",
+            },
+            "listenbrainz": {
+                "label": "ListenBrainz",
+                "title": "ListenBrainz discovery",
+                "username_attr": "listenbrainz_username",
+                "service_ready": self.listenbrainz_user_service is not None,
+                "service_missing_reason": "ListenBrainz integration is unavailable right now.",
+                "missing_username_reason": (
+                    "Add your ListenBrainz username under Profile → Listening services to use this feature."
+                ),
+                "fetch": self._fetch_listenbrainz_personal_artists,
+                "error_message": "We couldn't reach ListenBrainz right now. Please try again shortly.",
+            },
+        }
+
+        config = source_definitions.get(source_key)
+        if not config:
             self._emit_personal_error(
                 sid,
                 source_key,
@@ -650,50 +717,53 @@ class DataHandler:
                 sid,
                 source_key,
                 "You need to sign in again before requesting personal recommendations.",
-                title="Last.fm discovery",
+                title=config["title"],
             )
             return
 
-        if not self.last_fm_user_service:
+        if not config["service_ready"]:
             self._emit_personal_error(
                 sid,
                 source_key,
-                "Administrator must configure a Last.fm API key and secret in Settings before this feature can be used.",
-                title="Last.fm discovery",
+                config["service_missing_reason"],
+                title=config["title"],
             )
             return
 
-        username = (user.lastfm_username or "").strip()
+        username = (getattr(user, config["username_attr"], "") or "").strip()
         if not username:
             self._emit_personal_error(
                 sid,
                 source_key,
-                "Add your Last.fm username under Profile → Listening services to use this feature.",
-                title="Last.fm discovery",
+                config["missing_username_reason"],
+                title=config["title"],
             )
             return
 
         start_time = time.perf_counter()
-        seeds: List[str] = []
-        skipped_existing: List[str] = []
+        source_label = config["label"]
+        username_display = username
 
         try:
-            recommendations = self.last_fm_user_service.get_recommended_artists(username, limit=50)
-            if not recommendations:
-                recommendations = self.last_fm_user_service.get_top_artists(username, limit=50)
-            seeds = [artist.name for artist in recommendations if artist.name]
-        except Exception as exc:  # pragma: no cover - network errors
-            self.logger.error("Failed to load Last.fm recommendations for %s: %s", username, exc)
+            seeds = config["fetch"](username)
+        except ListenBrainzIntegrationError as exc:  # pragma: no cover - network errors
+            self.logger.error("Failed to load ListenBrainz picks for %s: %s", username, exc)
             self._emit_personal_error(
                 sid,
                 source_key,
-                "We couldn't reach Last.fm right now. Please try again shortly.",
-                title="Last.fm discovery",
+                config["error_message"],
+                title=config["title"],
             )
             return
-
-        source_label = "Last.fm"
-        username_display = username
+        except Exception as exc:  # pragma: no cover - network errors
+            self.logger.error("Failed to load %s recommendations for %s: %s", source_label, username, exc)
+            self._emit_personal_error(
+                sid,
+                source_key,
+                config["error_message"],
+                title=config["title"],
+            )
+            return
 
         elapsed = time.perf_counter() - start_time
         self.logger.info(
@@ -710,16 +780,14 @@ class DataHandler:
                 sid,
                 source_key,
                 f"{source_label} didn't return any usable artists for your profile.",
-                title=f"{source_label} discovery",
+                title=config["title"],
             )
             return
 
-        # Ensure we have the user's Lidarr library cached so we can filter out owned artists
         if not session.cleaned_lidarr_items:
             cleaned = self._copy_cached_cleaned_names()
             if not cleaned:
                 try:
-                    # Populate cache synchronously; this updates both cache and session
                     self.get_artists_from_lidarr(sid)
                     cleaned = self._copy_cached_cleaned_names()
                 except Exception:  # pragma: no cover - network errors
@@ -727,6 +795,7 @@ class DataHandler:
             session.cleaned_lidarr_items = cleaned
         cleaned_library_names = set(session.cleaned_lidarr_items)
 
+        skipped_existing: List[str] = []
         filtered_seeds: List[str] = []
         for seed in seeds:
             normalized_seed = unidecode(seed).lower()
@@ -737,9 +806,10 @@ class DataHandler:
 
         if not filtered_seeds:
             self.logger.info(
-                "%s personal recommendations matched existing Lidarr artists for user %s", source_label, user.username
+                "%s personal recommendations matched existing Lidarr artists for user %s",
+                source_label,
+                user.username,
             )
-            # Let the client close the spinner gracefully with an ACK even if there are no seeds
             self.socketio.emit(
                 "user_recs_ack",
                 {
@@ -754,9 +824,8 @@ class DataHandler:
                 sid,
                 source_key,
                 "All recommended artists are already in your Lidarr library.",
-                title=f"{source_label} discovery",
+                title=config["title"],
             )
-            # Also ensure sidebar state reflects the stopped run
             session.mark_stopped()
             self.socketio.emit(
                 "lidarr_sidebar_update",
@@ -797,7 +866,9 @@ class DataHandler:
                 "skipped": skipped_existing,
             },
             error_event="user_recs_error",
-            error_message=f"We couldn't load personalised {source_label} picks right now. Please try again later.",
+            error_message=(
+                f"We couldn't load personalised {source_label} picks right now. Please try again later."
+            ),
             missing_title=f"{source_label} data",
             missing_message=f"Some {source_label} picks couldn't be fully loaded.",
             source_log_label=source_label,

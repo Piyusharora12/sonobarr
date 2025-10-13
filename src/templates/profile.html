@@ -36,6 +36,13 @@
               <div class="form-text">Optional. Used to pull personal recommendations while keeping the global API key.</div>
               <div class="form-text">We use your public Last.fm profile to approximate recommendations. Linking is not required.</div>
             </div>
+            <div class="mb-3">
+              <label for="listenbrainz_username" class="form-label">ListenBrainz username</label>
+              <input type="text" class="form-control" id="listenbrainz_username" name="listenbrainz_username"
+                     value="{{ current_user.listenbrainz_username or '' }}" placeholder="e.g., yourlistenbrainz">
+              <div class="form-text">Optional. Enables ListenBrainz weekly exploration picks in personal discovery.</div>
+              <div class="form-text">We only read public playlist data; nothing is posted back to ListenBrainz.</div>
+            </div>
             <hr>
             <p class="fw-semibold">Change password</p>
             <div class="mb-3">
