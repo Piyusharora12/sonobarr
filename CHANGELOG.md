@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Add REST API with API key auth.
 - Add ListenBrainz discovery + Lidarr monitoring.
+- Deep Lidarr Integration
 
 ### Security
 - Harden startup and refactor web/API logic.
