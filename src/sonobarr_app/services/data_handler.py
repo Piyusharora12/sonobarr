@@ -97,6 +97,7 @@ class DataHandler:
         self.openai_api_key = ""
         self.openai_model = ""
         self.openai_max_seed_artists = DEFAULT_MAX_SEED_ARTISTS
+        self.api_key = ""
         self.openai_recommender: Optional[OpenAIRecommender] = None
         self.last_fm_user_service: Optional[LastFmUserService] = None
 
@@ -106,6 +107,9 @@ class DataHandler:
     def set_flask_app(self, app) -> None:
         """Bind the Flask app so background tasks can push an app context."""
         self._flask_app = app
+        # Set API_KEY in Flask app config from settings
+        if self.api_key:
+            app.config['API_KEY'] = self.api_key
 
     def _env(self, key: str) -> str:
         value = get_env_value(key)
@@ -1024,10 +1028,7 @@ class DataHandler:
                 "openai_api_key": self.openai_api_key,
                 "openai_model": self.openai_model,
                 "openai_max_seed_artists": self.openai_max_seed_artists,
-                "similar_artist_batch_size": self.similar_artist_batch_size,
-                "app_name": self.app_name,
-                "app_rev": self.app_rev,
-                "app_url": self.app_url,
+                "api_key": self.api_key,
             }
             self.socketio.emit("settingsLoaded", data, room=sid)
         except Exception as exc:
@@ -1086,66 +1087,12 @@ class DataHandler:
                 self.last_fm_api_key = _clean_str(data.get("last_fm_api_key"))
             if "last_fm_api_secret" in data:
                 self.last_fm_api_secret = _clean_str(data.get("last_fm_api_secret"))
+            if "api_key" in data:
+                self.api_key = _clean_str(data.get("api_key"))
 
-            if "quality_profile_id" in data:
-                self.quality_profile_id = _coerce_int(
-                    data.get("quality_profile_id"),
-                    self.quality_profile_id,
-                    minimum=1,
-                )
-            if "metadata_profile_id" in data:
-                self.metadata_profile_id = _coerce_int(
-                    data.get("metadata_profile_id"),
-                    self.metadata_profile_id,
-                    minimum=1,
-                )
-            if "lidarr_api_timeout" in data:
-                self.lidarr_api_timeout = _coerce_float(
-                    data.get("lidarr_api_timeout"),
-                    float(self.lidarr_api_timeout),
-                    minimum=1.0,
-                )
-            if "similar_artist_batch_size" in data:
-                self.similar_artist_batch_size = _coerce_int(
-                    data.get("similar_artist_batch_size"),
-                    self.similar_artist_batch_size,
-                    minimum=1,
-                )
-
-            if "fallback_to_top_result" in data:
-                self.fallback_to_top_result = _coerce_bool(
-                    data.get("fallback_to_top_result"),
-                    self.fallback_to_top_result,
-                )
-            if "search_for_missing_albums" in data:
-                self.search_for_missing_albums = _coerce_bool(
-                    data.get("search_for_missing_albums"),
-                    self.search_for_missing_albums,
-                )
-            if "dry_run_adding_to_lidarr" in data:
-                self.dry_run_adding_to_lidarr = _coerce_bool(
-                    data.get("dry_run_adding_to_lidarr"),
-                    self.dry_run_adding_to_lidarr,
-                )
-            if "auto_start" in data:
-                self.auto_start = _coerce_bool(data.get("auto_start"), self.auto_start)
-            if "auto_start_delay" in data:
-                self.auto_start_delay = _coerce_float(
-                    data.get("auto_start_delay"),
-                    float(self.auto_start_delay),
-                    minimum=0.0,
-                )
-
-            if "openai_api_key" in data:
-                self.openai_api_key = _clean_str(data.get("openai_api_key"))
-            if "openai_model" in data:
-                self.openai_model = _clean_str(data.get("openai_model"))
-            if "openai_max_seed_artists" in data:
-                self.openai_max_seed_artists = _coerce_int(
-                    data.get("openai_max_seed_artists"),
-                    self.openai_max_seed_artists,
-                    minimum=1,
-                )
+            # Update Flask app config with API_KEY
+            if self._flask_app:
+                self._flask_app.config['API_KEY'] = self.api_key
 
             self._configure_openai_client()
             self._configure_listening_services()
@@ -1541,6 +1488,7 @@ class DataHandler:
                 "openai_api_key": self.openai_api_key,
                 "openai_model": self.openai_model,
                 "openai_max_seed_artists": self.openai_max_seed_artists,
+                "api_key": self.api_key,
             }
 
             with tempfile.NamedTemporaryFile(
@@ -1620,6 +1568,7 @@ class DataHandler:
             "openai_api_key": "",
             "openai_model": "",
             "openai_max_seed_artists": DEFAULT_MAX_SEED_ARTISTS,
+            "api_key": "",
             "sonobarr_superadmin_username": "admin",
             "sonobarr_superadmin_password": "",
             "sonobarr_superadmin_display_name": "Super Admin",
@@ -1664,6 +1613,7 @@ class DataHandler:
         self.openai_model = self._env("openai_model")
         openai_max_seed = self._env("openai_max_seed_artists")
         self.openai_max_seed_artists = int(openai_max_seed) if openai_max_seed else ""
+        self.api_key = self._env("api_key")
 
         auto_start = self._env("auto_start")
         self.auto_start = auto_start.lower() == "true" if auto_start != "" else ""

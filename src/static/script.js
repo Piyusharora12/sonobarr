@@ -54,6 +54,7 @@ const auto_start_checkbox = document.getElementById('auto-start');
 const auto_start_delay_input = document.getElementById('auto-start-delay');
 const last_fm_api_key_input = document.getElementById('last-fm-api-key');
 const last_fm_api_secret_input = document.getElementById('last-fm-api-secret');
+const api_key_input = document.getElementById('api-key');
 
 const personalLastfmButton = document.getElementById('personal-lastfm-button');
 const personalLastfmSpinner = document.getElementById(
@@ -871,6 +872,7 @@ function build_settings_payload() {
 		last_fm_api_secret: last_fm_api_secret_input
 			? last_fm_api_secret_input.value
 			: '',
+		api_key: api_key_input ? api_key_input.value : '',
 	};
 }
 
@@ -944,6 +946,9 @@ function populate_settings_form(settings) {
 	}
 	if (last_fm_api_secret_input) {
 		last_fm_api_secret_input.value = settings.last_fm_api_secret || '';
+	}
+	if (api_key_input) {
+		api_key_input.value = settings.api_key || '';
 	}
 	if (openai_api_key_input) {
 		openai_api_key_input.value = settings.openai_api_key || '';

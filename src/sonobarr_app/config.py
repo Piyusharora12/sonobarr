@@ -72,6 +72,7 @@ class Config:
     GITHUB_USER_AGENT = get_env_value("github_user_agent", "sonobarr-app")
     RELEASE_CACHE_TTL_SECONDS = _get_int("release_cache_ttl_seconds", 60 * 60)
     LOG_LEVEL = (get_env_value("log_level", "INFO") or "INFO").upper()
+    API_KEY = get_env_value("api_key")
 
     CONFIG_DIR = str(CONFIG_DIR_PATH)
     SETTINGS_FILE = str(SETTINGS_FILE_PATH)
