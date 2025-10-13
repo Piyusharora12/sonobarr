@@ -1,6 +1,6 @@
 # Sonobarr
 
-> Music discovery for Lidarr power users, backed by Last.fm intelligence and a modern web UI.
+> Music discovery for Lidarr power users, blending Last.fm insights, ListenBrainz playlists, and a modern web UI.
 
 [![Release](https://img.shields.io/github/v/release/Dodelidoo-Labs/sonobarr?label=Latest%20release&cacheSeconds=60)](https://github.com/Dodelidoo-Labs/sonobarr/releases)
 [![Container](https://img.shields.io/badge/GHCR-sonobarr-blue?logo=github)](https://github.com/Dodelidoo-Labs/sonobarr/pkgs/container/sonobarr)
@@ -31,18 +31,18 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
 
 ## Features at a glance
 
-- 🔌 **Lidarr integration** – fetch and cache your monitored artists automatically.
-- 🔍 **Smart discovery** – query Last.fm for related artists (both based on your current lidarr library, AI seeds and your personal LastFM suggested artists), with dedupe and similarity scoring.
-- 🤖 **AI assistant** – describe moods, genres or artists in plain English and let OpenAI pick seed artists for you.
-- 🎧 **Preview & bio panels** – jump straight into YouTube or iTunes previews and read Last.fm bios with preserved paragraph formatting.
-- 🧩 **Compact artist cards** – square artwork, button controls, and a top-right status.
-- ⚡️ **Real-time UX** – Socket.IO pushes new cards, status updates, and toast notifications instantly.
-- 👥 **Role-based access** – built-in authentication plus an admin-only settings & user management area. Non-admins can request artists, Admins can approve/deny requests.
-- 🔒 **Secure forms** – CSRF protection and stricter cookie settings keep sessions and admin actions safe.
-- 🛡️ **Hardened config storage** – settings are flushed via atomic writes and locked down to `0600`, keeping API keys private in shared hosts.
-- 🔔 **Update awareness** – footer badge compares your container version with the latest GitHub release.
-- 🧱 **Zero touch migrations** – database schema managed by Flask-Migrate and applied automatically on boot.
-- 🐳 **Docker-first deployment** – official image on GHCR, mountable config volume, healthy defaults.
+- 🔌 **Deep Lidarr integration** – sync monitored artists, apply per-source monitor strategies, toggle monitor-new-albums policies, and send additions straight back to Lidarr.
+- 🧭 **Personal discovery hub** – stream batches sourced from your Lidarr library, your saved Last.fm scrobbles, and ListenBrainz Weekly Exploration playlists, all controllable from the sidebar.
+- 🤖 **AI assistant** – describe the vibe you want and let OpenAI seed new sessions with fresh artists, respecting optional library exclusions.
+- 🙋 **Artist requests workflow** – non-admins raise requests, admins approve or reject with a single click, and every action is audited in real time.
+- 🎧 **Preview & context panels** – launch YouTube or iTunes previews, inspect Last.fm biographies, and read key stats without leaving the grid.
+- ⚡️ **Real-time UX** – Socket.IO keeps discovery progress, toast alerts, and button states in sync across every connected client.
+- 👥 **Role-based access** – authentication, user management, profile controls for personal services, and admin-only settings live in one UI.
+- 🛡️ **Hardened configuration** – atomic settings writes, locked-down file permissions, and CSRF-protected forms keep secrets safe.
+- 🔔 **Update & schema self-healing** – footer badges surface new releases and the app backfills missing DB columns before loading users.
+- 🐳 **Docker-first deployment** – official GHCR image, rootless-friendly UID/GID mapping, and automatic migrations on start.
+- 🌐 Public API – REST API for integrating external tools such as custom dashboards (Documentation upcoming).
+
 
 ---
 

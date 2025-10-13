@@ -4,13 +4,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2025-10-13
+### Added
+- Add REST API with API key auth.
+- Add ListenBrainz discovery + Lidarr monitoring.
+
+### Security
+- Harden startup and refactor web/API logic.
+
 ## [0.8.0] - 2025-10-10
-## Added
+### Added
 - "Request Artist" logic for non-admin users. Admins can approve/deny requests.
 
 ## [0.7.0] - 2025-10-10
-## Added
-- LastFM integration (for each user) to get "My LastFM recommendations"
+### Added
+- LastFM integration (for each user) to get "My LastFM recommendations".
 
 ### Changed
 - Settings persistence now writes atomically to `settings_config.json` and forces `0600` permissions to keep API keys and admin credentials private inside the container.
