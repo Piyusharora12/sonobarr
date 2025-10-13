@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from flask import Blueprint, current_app, jsonify, request
 from flask_login import current_user
 
@@ -9,31 +11,53 @@ from ..models import ArtistRequest, User
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 
+_ERROR_KEY_INVALID = {"error": "Invalid API key"}
+_ERROR_INTERNAL = {"error": "Internal server error"}
+
+
+def _normalize_api_key(key_value):
+    if key_value is None:
+        return None
+    return str(key_value).strip()
+
+
+def _configured_api_key():
+    configured_key = current_app.config.get("API_KEY")
+    if configured_key:
+        return _normalize_api_key(configured_key)
+
+    data_handler = current_app.extensions.get("data_handler")
+    if data_handler is not None:
+        derived_key = getattr(data_handler, "api_key", None)
+        return _normalize_api_key(derived_key)
+    return None
+
+
+def _resolve_request_api_key():
+    header_key = request.headers.get("X-API-Key")
+    if header_key is not None:
+        return _normalize_api_key(header_key)
+
+    header_key_alt = request.headers.get("X-Api-Key")
+    if header_key_alt is not None:
+        return _normalize_api_key(header_key_alt)
+
+    query_key = request.args.get("api_key") or request.args.get("key")
+    return _normalize_api_key(query_key)
+
 
 def api_key_required(view):
     """Decorator to require API key for API endpoints."""
+
     def wrapped(*args, **kwargs):
-        # Extract API key from headers or query params
-        api_key = request.headers.get("X-API-Key")
-        if api_key is None:
-            api_key = request.headers.get("X-Api-Key")
-        if api_key is None:
-            api_key = request.args.get("api_key") or request.args.get("key")
-        if api_key is not None:
-            api_key = str(api_key).strip()
+        api_key = _resolve_request_api_key()
+        configured_key = _configured_api_key()
 
-        configured_key = current_app.config.get("API_KEY")
-        if not configured_key:
-            data_handler = current_app.extensions.get("data_handler")
-            if data_handler is not None:
-                configured_key = getattr(data_handler, "api_key", None)
-
-        if configured_key:
-            configured_key = str(configured_key).strip()
-            if configured_key and api_key != configured_key:
-                return jsonify({"error": "Invalid API key"}), 401
+        if configured_key and configured_key != api_key:
+            return jsonify(_ERROR_KEY_INVALID), 401
 
         return view(*args, **kwargs)
+
     wrapped.__name__ = view.__name__
     return wrapped
 
@@ -72,7 +96,7 @@ def status():
         })
     except Exception as e:
         current_app.logger.error(f"API status error: {e}")
-        return jsonify({"error": "Internal server error"}), 500
+        return jsonify(_ERROR_INTERNAL), 500
 
 
 @bp.route("/artist-requests")
@@ -108,7 +132,7 @@ def artist_requests():
         })
     except Exception as e:
         current_app.logger.error(f"API artist-requests error: {e}")
-        return jsonify({"error": "Internal server error"}), 500
+        return jsonify(_ERROR_INTERNAL), 500
 
 
 @bp.route("/stats")
@@ -128,8 +152,7 @@ def stats():
         rejected_requests = ArtistRequest.query.filter_by(status="rejected").count()
         
         # Recent activity (last 7 days)
-        from datetime import datetime, timedelta
-        week_ago = datetime.utcnow() - timedelta(days=7)
+        week_ago = datetime.now(timezone.utc) - timedelta(days=7)
         recent_requests = ArtistRequest.query.filter(ArtistRequest.created_at >= week_ago).count()
         
         # Top requesters
@@ -162,4 +185,4 @@ def stats():
         })
     except Exception as e:
         current_app.logger.error(f"API stats error: {e}")
-        return jsonify({"error": "Internal server error"}), 500
+        return jsonify(_ERROR_INTERNAL), 500

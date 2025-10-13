@@ -1041,40 +1041,6 @@ class DataHandler:
                     return ""
                 return str(value).strip()
 
-            def _coerce_bool(value: Any, current: bool) -> bool:
-                if isinstance(value, bool):
-                    return value
-                if value is None:
-                    return current
-                if isinstance(value, (int, float)):
-                    return value != 0
-                value_str = str(value).strip().lower()
-                if value_str == "":
-                    return False
-                return value_str in {"1", "true", "yes", "on"}
-
-            def _coerce_int(value: Any, current: int, minimum: int | None = None) -> int:
-                if value in (None, ""):
-                    return current
-                try:
-                    parsed = int(value)
-                except (TypeError, ValueError):
-                    return current
-                if minimum is not None and parsed < minimum:
-                    return minimum
-                return parsed
-
-            def _coerce_float(value: Any, current: float, minimum: float | None = None) -> float:
-                if value in (None, ""):
-                    return current
-                try:
-                    parsed = float(value)
-                except (TypeError, ValueError):
-                    return current
-                if minimum is not None and parsed < minimum:
-                    return minimum
-                return parsed
-
             if "lidarr_address" in data:
                 self.lidarr_address = _clean_str(data.get("lidarr_address"))
             if "lidarr_api_key" in data:
@@ -1547,7 +1513,7 @@ class DataHandler:
 
     def load_environ_or_config_settings(self) -> None:
         default_settings = {
-            "lidarr_address": "http://192.168.1.1:8686",
+            "lidarr_address": "",
             "lidarr_api_key": "",
             "root_folder_path": "/data/media/music/",
             "fallback_to_top_result": False,
@@ -1558,7 +1524,7 @@ class DataHandler:
             "dry_run_adding_to_lidarr": False,
             "app_name": "Sonobarr",
             "app_rev": "0.10",
-            "app_url": "http://" + "".join(random.choices(string.ascii_lowercase, k=10)) + ".com",
+            "app_url": "https://" + "".join(random.choices(string.ascii_lowercase, k=10)) + ".com",  # NOSONAR(S2245)
             "last_fm_api_key": "",
             "last_fm_api_secret": "",
             "auto_start": False,

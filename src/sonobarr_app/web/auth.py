@@ -10,38 +10,55 @@ from ..extensions import db
 
 bp = Blueprint("auth", __name__)
 
+_HOME_ENDPOINT = "main.home"
 
-@bp.route("/login", methods=["GET", "POST"])
+
+def _authenticate(username: str, password: str):
+    if not username or not password:
+        flash("Username and password are required.", "danger")
+        return None
+
+    try:
+        user = User.query.filter_by(username=username).first()
+    except (OperationalError, ProgrammingError) as exc:
+        current_app.logger.warning(
+            "Database schema not ready during login attempt for username %s: %s",
+            username,
+            exc,
+        )
+        db.session.rollback()
+        flash("Database upgrade in progress. Please try again in a moment.", "warning")
+        return None
+
+    if not user or not user.check_password(password):
+        flash("Invalid username or password.", "danger")
+        return None
+    if not user.is_active:
+        flash("Account is disabled.", "danger")
+        return None
+
+    login_user(user)
+    flash("Welcome to Sonobarr!", "success")
+    return redirect(url_for(_HOME_ENDPOINT))
+
+
+@bp.get("/login")
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for("main.home"))
+        return redirect(url_for(_HOME_ENDPOINT))
+    return render_template("login.html")
 
-    if request.method == "POST":
-        username = (request.form.get("username") or "").strip()
-        password = request.form.get("password") or ""
-        if not username or not password:
-            flash("Username and password are required.", "danger")
-        else:
-            try:
-                user = User.query.filter_by(username=username).first()
-            except (OperationalError, ProgrammingError) as exc:
-                current_app.logger.warning(
-                    "Database schema not ready during login attempt for username %s: %s",
-                    username,
-                    exc,
-                )
-                db.session.rollback()
-                flash("Database upgrade in progress. Please try again in a moment.", "warning")
-            else:
-                if not user or not user.check_password(password):
-                    flash("Invalid username or password.", "danger")
-                elif not user.is_active:
-                    flash("Account is disabled.", "danger")
-                else:
-                    login_user(user)
-                    flash("Welcome to Sonobarr!", "success")
-                    return redirect(url_for("main.home"))
 
+@bp.post("/login")
+def login_submit():
+    if current_user.is_authenticated:
+        return redirect(url_for(_HOME_ENDPOINT))
+
+    username = (request.form.get("username") or "").strip()
+    password = request.form.get("password") or ""
+    response = _authenticate(username, password)
+    if response is not None:
+        return response
     return render_template("login.html")
 
 
