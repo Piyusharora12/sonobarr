@@ -26,6 +26,23 @@ from ..models import User, ArtistRequest
 from .openai_client import DEFAULT_MAX_SEED_ARTISTS, OpenAIRecommender
 from .integrations.lastfm_user import LastFmUserService
 
+LIDARR_MONITOR_TYPES = {
+    "all",
+    "future",
+    "missing",
+    "existing",
+    "latest",
+    "first",
+    "none",
+    "unknown",
+}
+
+LIDARR_MONITOR_NEW_ITEM_TYPES = {
+    "all",
+    "none",
+    "new",
+}
+
 
 @dataclass
 class SessionState:
@@ -98,6 +115,10 @@ class DataHandler:
         self.openai_model = ""
         self.openai_max_seed_artists = DEFAULT_MAX_SEED_ARTISTS
         self.api_key = ""
+        self.lidarr_monitor_option = ""
+        self.lidarr_monitored = True
+        self.lidarr_albums_to_monitor: List[str] = []
+        self.lidarr_monitor_new_items = ""
         self.openai_recommender: Optional[OpenAIRecommender] = None
         self.last_fm_user_service: Optional[LastFmUserService] = None
 
@@ -114,6 +135,135 @@ class DataHandler:
     def _env(self, key: str) -> str:
         value = get_env_value(key)
         return value if value is not None else ""
+
+    @staticmethod
+    def _coerce_bool(value: Any) -> Optional[bool]:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return bool(value)
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off"}:
+                return False
+        return None
+
+    @staticmethod
+    def _coerce_int(value: Any, *, minimum: Optional[int] = None) -> Optional[int]:
+        if value is None or value == "":
+            return None
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return None
+        if minimum is not None and parsed < minimum:
+            return minimum
+        return parsed
+
+    @staticmethod
+    def _coerce_float(value: Any, *, minimum: Optional[float] = None) -> Optional[float]:
+        if value is None or value == "":
+            return None
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            return None
+        if minimum is not None and parsed < minimum:
+            return minimum
+        return parsed
+
+    @staticmethod
+    def _normalize_monitor_option(value: Any) -> str:
+        if value is None:
+            return ""
+        candidate = str(value).strip().lower()
+        return candidate if candidate in LIDARR_MONITOR_TYPES else ""
+
+    @staticmethod
+    def _normalize_monitor_new_items(value: Any) -> str:
+        if value is None:
+            return ""
+        candidate = str(value).strip().lower()
+        return candidate if candidate in LIDARR_MONITOR_NEW_ITEM_TYPES else ""
+
+    @staticmethod
+    def _parse_albums_to_monitor(value: Any) -> List[str]:
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        if value is None:
+            return []
+        items: List[str] = []
+        text = str(value)
+        separators = text.replace(",", "\n").splitlines()
+        for item in separators:
+            cleaned = item.strip()
+            if cleaned:
+                items.append(cleaned)
+        return items
+
+    @staticmethod
+    def _clean_str_value(value: Any) -> str:
+        if value is None:
+            return ""
+        return str(value).strip()
+
+    def _apply_string_settings(self, data: dict) -> None:
+        string_fields = {
+            "lidarr_address": "lidarr_address",
+            "lidarr_api_key": "lidarr_api_key",
+            "root_folder_path": "root_folder_path",
+            "youtube_api_key": "youtube_api_key",
+            "openai_api_key": "openai_api_key",
+            "openai_model": "openai_model",
+            "last_fm_api_key": "last_fm_api_key",
+            "last_fm_api_secret": "last_fm_api_secret",
+            "api_key": "api_key",
+        }
+        for payload_key, attr in string_fields.items():
+            if payload_key in data:
+                setattr(self, attr, self._clean_str_value(data.get(payload_key)))
+
+    def _apply_int_settings(self, data: dict) -> None:
+        int_fields = {
+            "quality_profile_id": ("quality_profile_id", 1),
+            "metadata_profile_id": ("metadata_profile_id", 1),
+            "similar_artist_batch_size": ("similar_artist_batch_size", 1),
+            "openai_max_seed_artists": ("openai_max_seed_artists", 1),
+        }
+        for payload_key, (attr, minimum) in int_fields.items():
+            if payload_key in data:
+                parsed_int = self._coerce_int(data.get(payload_key), minimum=minimum)
+                if parsed_int is not None:
+                    setattr(self, attr, parsed_int)
+
+    def _apply_float_settings(self, data: dict) -> None:
+        float_fields = {
+            "lidarr_api_timeout": ("lidarr_api_timeout", 1.0),
+            "auto_start_delay": ("auto_start_delay", 0.0),
+        }
+        for payload_key, (attr, minimum) in float_fields.items():
+            if payload_key in data:
+                parsed_float = self._coerce_float(data.get(payload_key), minimum=minimum)
+                if parsed_float is not None:
+                    setattr(self, attr, parsed_float)
+
+    def _apply_bool_settings(self, data: dict) -> None:
+        bool_fields = {
+            "fallback_to_top_result": "fallback_to_top_result",
+            "search_for_missing_albums": "search_for_missing_albums",
+            "dry_run_adding_to_lidarr": "dry_run_adding_to_lidarr",
+            "auto_start": "auto_start",
+            "lidarr_monitored": "lidarr_monitored",
+        }
+        for payload_key, attr in bool_fields.items():
+            if payload_key in data:
+                coerced_bool = self._coerce_bool(data.get(payload_key))
+                if coerced_bool is not None:
+                    setattr(self, attr, coerced_bool)
 
     # Session helpers -------------------------------------------------
     def ensure_session(self, sid: str, user_id: Optional[int] = None, is_admin: bool = False) -> SessionState:
@@ -815,6 +965,15 @@ class DataHandler:
             if mbid:
                 lidarr_url = f"{self.lidarr_address}/api/v1/artist"
                 headers = {"X-Api-Key": self.lidarr_api_key}
+                monitored_flag = bool(self.lidarr_monitored)
+                add_options: dict[str, Any] = {
+                    "searchForMissingAlbums": bool(self.search_for_missing_albums),
+                    "monitored": monitored_flag,
+                }
+                if self.lidarr_monitor_option:
+                    add_options["monitor"] = self.lidarr_monitor_option
+                if self.lidarr_albums_to_monitor:
+                    add_options["albumsToMonitor"] = list(self.lidarr_albums_to_monitor)
                 payload = {
                     "ArtistName": artist_name,
                     "qualityProfileId": self.quality_profile_id,
@@ -822,11 +981,11 @@ class DataHandler:
                     "path": os.path.join(self.root_folder_path, artist_folder, ""),
                     "rootFolderPath": self.root_folder_path,
                     "foreignArtistId": mbid,
-                    "monitored": True,
-                    "addOptions": {
-                        "searchForMissingAlbums": self.search_for_missing_albums,
-                    },
+                    "monitored": monitored_flag,
+                    "addOptions": add_options,
                 }
+                if self.lidarr_monitor_new_items:
+                    payload["monitorNewItems"] = self.lidarr_monitor_new_items
 
                 if self.dry_run_adding_to_lidarr:
                     response = None
@@ -1021,6 +1180,10 @@ class DataHandler:
                 "fallback_to_top_result": self.fallback_to_top_result,
                 "search_for_missing_albums": self.search_for_missing_albums,
                 "dry_run_adding_to_lidarr": self.dry_run_adding_to_lidarr,
+                "lidarr_monitor_option": self.lidarr_monitor_option,
+                "lidarr_monitored": self.lidarr_monitored,
+                "lidarr_monitor_new_items": self.lidarr_monitor_new_items,
+                "lidarr_albums_to_monitor": "\n".join(self.lidarr_albums_to_monitor) if self.lidarr_albums_to_monitor else "",
                 "last_fm_api_key": self.last_fm_api_key,
                 "last_fm_api_secret": self.last_fm_api_secret,
                 "auto_start": self.auto_start,
@@ -1036,25 +1199,30 @@ class DataHandler:
 
     def update_settings(self, data: dict) -> None:
         try:
-            def _clean_str(value: Any) -> str:
-                if value is None:
-                    return ""
-                return str(value).strip()
+            self._apply_string_settings(data)
+            self._apply_int_settings(data)
+            self._apply_float_settings(data)
+            self._apply_bool_settings(data)
 
-            if "lidarr_address" in data:
-                self.lidarr_address = _clean_str(data.get("lidarr_address"))
-            if "lidarr_api_key" in data:
-                self.lidarr_api_key = _clean_str(data.get("lidarr_api_key"))
-            if "root_folder_path" in data:
-                self.root_folder_path = _clean_str(data.get("root_folder_path"))
-            if "youtube_api_key" in data:
-                self.youtube_api_key = _clean_str(data.get("youtube_api_key"))
-            if "last_fm_api_key" in data:
-                self.last_fm_api_key = _clean_str(data.get("last_fm_api_key"))
-            if "last_fm_api_secret" in data:
-                self.last_fm_api_secret = _clean_str(data.get("last_fm_api_secret"))
-            if "api_key" in data:
-                self.api_key = _clean_str(data.get("api_key"))
+            if "lidarr_monitor_option" in data:
+                self.lidarr_monitor_option = self._normalize_monitor_option(data.get("lidarr_monitor_option"))
+
+            if "lidarr_monitor_new_items" in data:
+                self.lidarr_monitor_new_items = self._normalize_monitor_new_items(
+                    data.get("lidarr_monitor_new_items")
+                )
+
+            if "lidarr_albums_to_monitor" in data:
+                self.lidarr_albums_to_monitor = self._parse_albums_to_monitor(
+                    data.get("lidarr_albums_to_monitor")
+                )
+
+            if self.similar_artist_batch_size <= 0:
+                self.similar_artist_batch_size = 1
+            if self.openai_max_seed_artists <= 0:
+                self.openai_max_seed_artists = DEFAULT_MAX_SEED_ARTISTS
+            if self.auto_start_delay < 0:
+                self.auto_start_delay = 0
 
             # Update Flask app config with API_KEY
             if self._flask_app:
@@ -1442,6 +1610,10 @@ class DataHandler:
                 "metadata_profile_id": self.metadata_profile_id,
                 "search_for_missing_albums": self.search_for_missing_albums,
                 "dry_run_adding_to_lidarr": self.dry_run_adding_to_lidarr,
+                "lidarr_monitor_option": self.lidarr_monitor_option,
+                "lidarr_monitored": self.lidarr_monitored,
+                "lidarr_albums_to_monitor": self.lidarr_albums_to_monitor,
+                "lidarr_monitor_new_items": self.lidarr_monitor_new_items,
                 "app_name": self.app_name,
                 "app_rev": self.app_rev,
                 "app_url": self.app_url,
@@ -1522,6 +1694,10 @@ class DataHandler:
             "metadata_profile_id": 1,
             "search_for_missing_albums": False,
             "dry_run_adding_to_lidarr": False,
+            "lidarr_monitor_option": "",
+            "lidarr_monitored": True,
+            "lidarr_albums_to_monitor": [],
+            "lidarr_monitor_new_items": "",
             "app_name": "Sonobarr",
             "app_rev": "0.10",
             "app_url": "https://" + "".join(random.choices(string.ascii_lowercase, k=10)) + ".com",  # NOSONAR(S2245)
@@ -1570,6 +1746,28 @@ class DataHandler:
             dry_run_adding_to_lidarr.lower() == "true" if dry_run_adding_to_lidarr != "" else ""
         )
 
+        monitor_option_env = self._env("lidarr_monitor_option")
+        self.lidarr_monitor_option = (
+            self._normalize_monitor_option(monitor_option_env) if monitor_option_env else ""
+        )
+
+        monitor_new_items_env = self._env("lidarr_monitor_new_items")
+        self.lidarr_monitor_new_items = (
+            self._normalize_monitor_new_items(monitor_new_items_env) if monitor_new_items_env else ""
+        )
+
+        monitored_env = self._env("lidarr_monitored")
+        if monitored_env == "":
+            self.lidarr_monitored = ""
+        else:
+            monitored_bool = self._coerce_bool(monitored_env)
+            self.lidarr_monitored = monitored_bool if monitored_bool is not None else ""
+
+        albums_env = self._env("lidarr_albums_to_monitor")
+        self.lidarr_albums_to_monitor = (
+            self._parse_albums_to_monitor(albums_env) if albums_env else ""
+        )
+
         self.app_name = self._env("app_name")
         self.app_rev = self._env("app_rev")
         self.app_url = self._env("app_url")
@@ -1616,6 +1814,13 @@ class DataHandler:
         for key, value in default_settings.items():
             if getattr(self, key, "") == "":
                 setattr(self, key, value)
+
+        self.lidarr_monitor_option = self._normalize_monitor_option(self.lidarr_monitor_option)
+        self.lidarr_monitor_new_items = self._normalize_monitor_new_items(self.lidarr_monitor_new_items)
+        monitored_bool = self._coerce_bool(self.lidarr_monitored)
+        self.lidarr_monitored = monitored_bool if monitored_bool is not None else bool(default_settings["lidarr_monitored"])
+        if not isinstance(self.lidarr_albums_to_monitor, list):
+            self.lidarr_albums_to_monitor = self._parse_albums_to_monitor(self.lidarr_albums_to_monitor)
 
         try:
             self.similar_artist_batch_size = int(self.similar_artist_batch_size)

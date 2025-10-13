@@ -50,6 +50,16 @@ const search_for_missing_albums_checkbox = document.getElementById(
 const dry_run_adding_to_lidarr_checkbox = document.getElementById(
 	'dry-run-adding-to-lidarr'
 );
+const lidarr_monitor_option_select = document.getElementById(
+	'lidarr-monitor-option'
+);
+const lidarr_monitor_new_items_select = document.getElementById(
+	'lidarr-monitor-new-items'
+);
+const lidarr_monitored_checkbox = document.getElementById('lidarr-monitored');
+const lidarr_albums_to_monitor_input = document.getElementById(
+	'lidarr-albums-to-monitor'
+);
 const auto_start_checkbox = document.getElementById('auto-start');
 const auto_start_delay_input = document.getElementById('auto-start-delay');
 const last_fm_api_key_input = document.getElementById('last-fm-api-key');
@@ -862,6 +872,18 @@ function build_settings_payload() {
 		dry_run_adding_to_lidarr: dry_run_adding_to_lidarr_checkbox
 			? dry_run_adding_to_lidarr_checkbox.checked
 			: false,
+		lidarr_monitor_option: lidarr_monitor_option_select
+			? lidarr_monitor_option_select.value
+			: '',
+		lidarr_monitor_new_items: lidarr_monitor_new_items_select
+			? lidarr_monitor_new_items_select.value
+			: '',
+		lidarr_monitored: lidarr_monitored_checkbox
+			? lidarr_monitored_checkbox.checked
+			: true,
+		lidarr_albums_to_monitor: lidarr_albums_to_monitor_input
+			? lidarr_albums_to_monitor_input.value
+			: '',
 		auto_start: auto_start_checkbox ? auto_start_checkbox.checked : false,
 		auto_start_delay: auto_start_delay_input
 			? auto_start_delay_input.value
@@ -925,6 +947,25 @@ function populate_settings_form(settings) {
 		dry_run_adding_to_lidarr_checkbox.checked = Boolean(
 			settings.dry_run_adding_to_lidarr
 		);
+	}
+	if (lidarr_monitor_option_select) {
+		lidarr_monitor_option_select.value =
+			settings.lidarr_monitor_option || '';
+	}
+	if (lidarr_monitor_new_items_select) {
+		lidarr_monitor_new_items_select.value =
+			settings.lidarr_monitor_new_items || '';
+	}
+	if (lidarr_monitored_checkbox) {
+		if (typeof settings.lidarr_monitored === 'boolean') {
+			lidarr_monitored_checkbox.checked = settings.lidarr_monitored;
+		} else {
+			lidarr_monitored_checkbox.checked = true;
+		}
+	}
+	if (lidarr_albums_to_monitor_input) {
+		lidarr_albums_to_monitor_input.value =
+			settings.lidarr_albums_to_monitor || '';
 	}
 	if (similar_artist_batch_size_input) {
 		const batchSize = settings.similar_artist_batch_size;
