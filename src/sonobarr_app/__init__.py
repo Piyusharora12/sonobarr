@@ -27,26 +27,9 @@ def _configure_swagger(app: Flask) -> None:
                 "route": "/api/docs.json",
             }
         ],
-        "static_url_path": "/flasgger_static",
-        "swagger_ui": True,
+        "static_url_path": "/flaggger_static",
+        "swagger_ui": False,
         "specs_route": "/api/docs/",
-        "swagger_ui_config": {
-            "displayOperationId": False,
-            "defaultModelsExpandDepth": 0,
-            "displayRequestDuration": True,
-            "filter": False,
-            "showExtensions": False,
-            "showCommonExtensions": False,
-            "deepLinking": True,
-            "supportedSubmitMethods": ["get", "post", "put", "delete", "patch"],
-            "urls": None,
-            "url": "/api/docs.json",
-            "urlsPrimaryName": None,
-            "dom_id": "#swagger-ui",
-            "displayExplorer": False,
-            "customfavIcon": "/static/favicon.ico",
-            "customCss": ".topbar-wrapper img {content:url('/static/sonobarr.png'); width:150px; height:auto;}",
-        }
     }
     
     swagger_template = {
