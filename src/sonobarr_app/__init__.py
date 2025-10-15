@@ -30,9 +30,10 @@ def _configure_swagger(app: Flask) -> None:
         "static_url_path": "/flasgger_static",
         "swagger_ui": True,
         "specs_route": "/api/docs/",
+        "openapi": "3.2.0",  # Latest OpenAPI specification version
     }
     swagger_template: dict[str, Any] = {
-        "openapi": "3.0.3",
+        "openapi": "3.2.0",
         "info": {
             "title": "Sonobarr API",
             "version": app.config.get("APP_VERSION", "unknown"),
