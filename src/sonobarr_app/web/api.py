@@ -78,10 +78,37 @@ def status():
       - System
     security:
       - ApiKeyAuth: []
-      - ApiKeyQuery: []
     responses:
       200:
         description: Service status
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: healthy
+            version:
+              type: string
+              example: "1.0.0"
+            users:
+              type: object
+              properties:
+                total:
+                  type: integer
+                admins:
+                  type: integer
+            artist_requests:
+              type: object
+              properties:
+                total:
+                  type: integer
+                pending:
+                  type: integer
+            services:
+              type: object
+              properties:
+                lidarr_connected:
+                  type: boolean
       401:
         description: Missing or invalid API key
       500:
@@ -123,7 +150,6 @@ def artist_requests():
       - Artist Requests
     security:
       - ApiKeyAuth: []
-      - ApiKeyQuery: []
     parameters:
       - in: query
         name: status
@@ -134,15 +160,40 @@ def artist_requests():
       - in: query
         name: limit
         type: integer
-        format: int32
-        required: false
         default: 50
         minimum: 1
         maximum: 100
+        required: false
         description: Maximum number of requests to return (max 100)
     responses:
       200:
         description: A list of artist requests
+        schema:
+          type: object
+          properties:
+            count:
+              type: integer
+            requests:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  artist_name:
+                    type: string
+                  status:
+                    type: string
+                  requested_by:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date-time
+                  approved_by:
+                    type: string
+                  approved_at:
+                    type: string
+                    format: date-time
       401:
         description: Missing or invalid API key
       500:
@@ -188,10 +239,43 @@ def stats():
       - Statistics
     security:
       - ApiKeyAuth: []
-      - ApiKeyQuery: []
     responses:
       200:
         description: Aggregated statistics
+        schema:
+          type: object
+          properties:
+            users:
+              type: object
+              properties:
+                total:
+                  type: integer
+                admins:
+                  type: integer
+                active:
+                  type: integer
+            artist_requests:
+              type: object
+              properties:
+                total:
+                  type: integer
+                pending:
+                  type: integer
+                approved:
+                  type: integer
+                rejected:
+                  type: integer
+                recent_week:
+                  type: integer
+            top_requesters:
+              type: array
+              items:
+                type: object
+                properties:
+                  username:
+                    type: string
+                  requests:
+                    type: integer
       401:
         description: Missing or invalid API key
       500:

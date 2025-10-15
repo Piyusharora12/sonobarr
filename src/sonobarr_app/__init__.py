@@ -30,6 +30,15 @@ def _configure_swagger(app: Flask) -> None:
         "static_url_path": "/flasgger_static",
         "swagger_ui": True,
         "specs_route": "/api/docs/",
+        # Disable the spec selector search bar
+        "swagger_ui_config": {
+            "displayOperationId": False,
+            "defaultModelsExpandDepth": 0,
+            "displayRequestDuration": True,
+            "filter": False,
+            "showExtensions": False,
+            "showCommonExtensions": False,
+        }
     }
     
     swagger_template = {
@@ -39,20 +48,20 @@ def _configure_swagger(app: Flask) -> None:
             "version": app.config.get("APP_VERSION", "unknown"),
             "description": "Sonobarr REST API documentation",
         },
+        "host": "",  # Empty = use current host
         "basePath": "/api",
-        "schemes": ["http", "https"],
+        "schemes": ["https", "http"],  # HTTPS first
         "securityDefinitions": {
             "ApiKeyAuth": {
                 "type": "apiKey",
                 "name": "X-API-Key",
                 "in": "header",
-            },
-            "ApiKeyQuery": {
-                "type": "apiKey",
-                "name": "api_key",
-                "in": "query",
+                "description": "Enter your API key"
             }
         },
+        "security": [
+            {"ApiKeyAuth": []}
+        ]
     }
     
     Swagger(app, config=swagger_config, template=swagger_template)
