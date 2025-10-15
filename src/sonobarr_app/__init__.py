@@ -28,7 +28,7 @@ def _configure_swagger(app: Flask) -> None:
             }
         ],
         "static_url_path": "/flaggger_static",
-        "swagger_ui": False,
+        "swagger_ui": True,
         "specs_route": "/api/docs/",
     }
     
