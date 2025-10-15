@@ -30,7 +30,6 @@ def _configure_swagger(app: Flask) -> None:
         "static_url_path": "/flasgger_static",
         "swagger_ui": True,
         "specs_route": "/api/docs/",
-        # Disable the spec selector search bar
         "swagger_ui_config": {
             "displayOperationId": False,
             "defaultModelsExpandDepth": 0,
@@ -38,6 +37,15 @@ def _configure_swagger(app: Flask) -> None:
             "filter": False,
             "showExtensions": False,
             "showCommonExtensions": False,
+            "deepLinking": True,
+            "supportedSubmitMethods": ["get", "post", "put", "delete", "patch"],
+            "urls": None,
+            "url": "/api/docs.json",
+            "urlsPrimaryName": None,
+            "dom_id": "#swagger-ui",
+            "displayExplorer": False,
+            "customfavIcon": "/static/favicon.ico",
+            "customCss": ".topbar-wrapper img {content:url('/static/sonobarr.png'); width:150px; height:auto;}",
         }
     }
     
