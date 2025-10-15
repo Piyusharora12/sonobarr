@@ -49,7 +49,8 @@ def _configure_swagger(app: Flask) -> None:
         },
         "security": [{"ApiKeyAuth": []}],
     }
-    swagger.init_app(app, config=swagger_config, template=swagger_template)
+    # Flasgger init_app expects positional args for config and template
+    swagger.init_app(app, swagger_config, swagger_template)
     
 def create_app(config_class: type[Config] = Config) -> Flask:
     app = Flask(
