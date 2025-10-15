@@ -23,7 +23,7 @@ def _configure_swagger(app: Flask) -> None:
             {
                 "endpoint": "openapi",
                 "route": "/api/docs.json",
-                "rule_filter": lambda rule: rule.rule.startswith("/api/"),
+                "rule_filter": lambda rule: rule.endpoint.startswith("api.") and rule.endpoint != "api.api_docs_index",
                 "model_filter": lambda tag: True,
             }
         ],
@@ -39,16 +39,111 @@ def _configure_swagger(app: Flask) -> None:
             "version": app.config.get("APP_VERSION", "unknown"),
             "description": "Sonobarr REST API documentation.",
         },
-        "components": {
-            "securitySchemes": {
-                "ApiKeyAuth": {
-                    "type": "apiKey",
-                    "name": "X-API-Key",
-                    "in": "header",
-                }
+        "securityDefinitions": {
+            "ApiKeyAuth": {
+                "type": "apiKey",
+                "name": "X-API-Key",
+                "in": "header",
+            },
+            "ApiKeyQuery": {
+                "type": "apiKey",
+                "name": "api_key",
+                "in": "query",
             }
         },
-        "security": [{"ApiKeyAuth": []}],
+        "definitions": {
+            "Error": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string",
+                        "description": "Error message"
+                    }
+                }
+            },
+            "StatusResponse": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string", "example": "healthy"},
+                    "version": {"type": "string", "example": "1.0.0"},
+                    "users": {
+                        "type": "object",
+                        "properties": {
+                            "total": {"type": "integer"},
+                            "admins": {"type": "integer"}
+                        }
+                    },
+                    "artist_requests": {
+                        "type": "object",
+                        "properties": {
+                            "total": {"type": "integer"},
+                            "pending": {"type": "integer"}
+                        }
+                    },
+                    "services": {
+                        "type": "object",
+                        "properties": {
+                            "lidarr_connected": {"type": "boolean"}
+                        }
+                    }
+                }
+            },
+            "ArtistRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer"},
+                    "artist_name": {"type": "string"},
+                    "status": {"type": "string", "enum": ["pending", "approved", "rejected"]},
+                    "requested_by": {"type": "string"},
+                    "created_at": {"type": "string", "format": "date-time"},
+                    "approved_by": {"type": "string", "nullable": True},
+                    "approved_at": {"type": "string", "format": "date-time", "nullable": True}
+                }
+            },
+            "ArtistRequestListResponse": {
+                "type": "object",
+                "properties": {
+                    "count": {"type": "integer"},
+                    "requests": {
+                        "type": "array",
+                        "items": {"$ref": "#/definitions/ArtistRequest"}
+                    }
+                }
+            },
+            "StatsResponse": {
+                "type": "object",
+                "properties": {
+                    "users": {
+                        "type": "object",
+                        "properties": {
+                            "total": {"type": "integer"},
+                            "admins": {"type": "integer"},
+                            "active": {"type": "integer"}
+                        }
+                    },
+                    "artist_requests": {
+                        "type": "object",
+                        "properties": {
+                            "total": {"type": "integer"},
+                            "pending": {"type": "integer"},
+                            "approved": {"type": "integer"},
+                            "rejected": {"type": "integer"},
+                            "recent_week": {"type": "integer"}
+                        }
+                    },
+                    "top_requesters": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "username": {"type": "string"},
+                                "requests": {"type": "integer"}
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
     # Initialize Swagger with the app directly
     from flasgger import Swagger
