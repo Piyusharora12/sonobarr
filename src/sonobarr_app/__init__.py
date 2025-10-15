@@ -10,13 +10,47 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from .bootstrap import bootstrap_super_admin
 from .config import Config, STATIC_DIR, TEMPLATE_DIR
-from .extensions import csrf, db, login_manager, migrate, socketio
+from .extensions import csrf, db, login_manager, migrate, socketio, swagger
 from .services.data_handler import DataHandler
 from .services.releases import ReleaseClient
 from .sockets import register_socketio_handlers
 from .web import admin_bp, api_bp, auth_bp, main_bp
 
-
+def _configure_swagger(app: Flask) -> None:
+    swagger_config: dict[str, Any] = {
+        "headers": [],
+        "specs": [
+            {
+                "endpoint": "openapi",
+                "route": "/api/docs.json",
+                "rule_filter": lambda rule: rule.rule.startswith("/api/"),
+                "model_filter": lambda tag: True,
+            }
+        ],
+        "static_url_path": "/flasgger_static",
+        "swagger_ui": True,
+        "specs_route": "/api/docs/",
+    }
+    swagger_template: dict[str, Any] = {
+        "openapi": "3.0.3",
+        "info": {
+            "title": "Sonobarr API",
+            "version": app.config.get("APP_VERSION", "unknown"),
+            "description": "Sonobarr REST API documentation.",
+        },
+        "components": {
+            "securitySchemes": {
+                "ApiKeyAuth": {
+                    "type": "apiKey",
+                    "name": "X-API-Key",
+                    "in": "header",
+                }
+            }
+        },
+        "security": [{"ApiKeyAuth": []}],
+    }
+    swagger.init_app(app, config=swagger_config, template=swagger_template)
+    
 def create_app(config_class: type[Config] = Config) -> Flask:
     app = Flask(
         __name__,
@@ -26,6 +60,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     app.config.from_object(config_class)
 
     _configure_logging(app)
+    _configure_swagger(app)
 
     # Core extensions -------------------------------------------------
     db.init_app(app)
@@ -109,7 +144,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
-    app.register_blueprint(api_bp)
+    app.register_blueprint(api_bp, url_prefix="/api")
 
     # Socket.IO -------------------------------------------------------
     register_socketio_handlers(socketio, data_handler)
