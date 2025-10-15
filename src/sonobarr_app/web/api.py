@@ -48,7 +48,9 @@ def _resolve_request_api_key():
 
 def api_key_required(view):
     """Decorator to require API key for API endpoints."""
-
+    from functools import wraps
+    
+    @wraps(view)
     def wrapped(*args, **kwargs):
         api_key = _resolve_request_api_key()
         configured_key = _configured_api_key()
@@ -58,7 +60,6 @@ def api_key_required(view):
 
         return view(*args, **kwargs)
 
-    wrapped.__name__ = view.__name__
     return wrapped
 
 
