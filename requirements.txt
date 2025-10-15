@@ -13,3 +13,4 @@ thefuzz
 Unidecode
 pylast
 openai
+flasgger
