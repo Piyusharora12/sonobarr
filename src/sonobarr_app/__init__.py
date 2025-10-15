@@ -10,7 +10,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from .bootstrap import bootstrap_super_admin
 from .config import Config, STATIC_DIR, TEMPLATE_DIR
-from .extensions import csrf, db, login_manager, migrate, socketio, swagger
+from .extensions import csrf, db, login_manager, migrate, socketio
 from .services.data_handler import DataHandler
 from .services.releases import ReleaseClient
 from .sockets import register_socketio_handlers
@@ -49,8 +49,9 @@ def _configure_swagger(app: Flask) -> None:
         },
         "security": [{"ApiKeyAuth": []}],
     }
-    # Flasgger init_app expects positional args for config and template
-    swagger.init_app(app, config=swagger_config, template=swagger_template)
+    # Initialize Swagger with the app directly
+    from flasgger import Swagger
+    Swagger(app, config=swagger_config, template=swagger_template)
     
 def create_app(config_class: type[Config] = Config) -> Flask:
     app = Flask(
