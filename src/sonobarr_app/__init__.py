@@ -160,6 +160,97 @@ def _configure_logging(app: Flask) -> None:
 __all__ = ["create_app", "socketio"]
 
 
+def _init_core_extensions(app: Flask) -> None:
+    db.init_app(app)
+    migrate.init_app(app, db)
+    login_manager.init_app(app)
+    login_manager.login_view = "auth.login"
+    login_manager.login_message = "Please log in to access Sonobarr."
+    login_manager.login_message_category = "warning"
+    csrf.init_app(app)
+    socketio.init_app(app, async_mode="gevent")
+
+
+def _register_user_loader() -> None:
+    from .models import User  # Imported lazily to avoid circular imports
+
+    @login_manager.user_loader
+    def load_user(user_id: str) -> Optional[User]:
+        if not user_id:
+            return None
+        try:
+            return User.query.get(int(user_id))
+        except (TypeError, ValueError):
+            return None
+        except (OperationalError, ProgrammingError) as exc:
+            current_app.logger.warning(
+                "Database schema not ready when loading user %s: %s", user_id, exc
+            )
+            db.session.rollback()
+            return None
+
+
+def _initialize_services(app: Flask) -> DataHandler:
+    data_handler = DataHandler(socketio=socketio, logger=app.logger, app_config=app.config)
+    release_client = ReleaseClient(
+        repo=app.config.get("GITHUB_REPO", "Dodelidoo-Labs/sonobarr"),
+        user_agent=app.config.get("GITHUB_USER_AGENT", "sonobarr-app"),
+        ttl_seconds=int(app.config.get("RELEASE_CACHE_TTL_SECONDS", 3600)),
+        logger=app.logger,
+    )
+
+    data_handler.set_flask_app(app)
+    app.extensions["data_handler"] = data_handler
+    app.extensions["release_client"] = release_client
+
+    @app.context_processor
+    def inject_footer_metadata() -> Dict[str, Any]:
+        current_version = (app.config.get("APP_VERSION") or "unknown").strip() or "unknown"
+        release_info = release_client.fetch_latest()
+        latest_version = release_info.get("tag_name")
+        update_available: Optional[bool]
+        status_color = "muted"
+
+        if latest_version and current_version.lower() not in {"", "unknown", "dev", "development"}:
+            update_available = latest_version != current_version
+            status_color = "danger" if update_available else "success"
+        elif latest_version:
+            update_available = None
+        else:
+            update_available = None
+
+        if release_info.get("error") and not latest_version:
+            status_color = "muted"
+
+        status_label = "Update status unavailable"
+        if update_available is True and latest_version:
+            status_label = f"Update available · {latest_version}"
+        elif update_available is False:
+            status_label = "Up to date"
+        elif update_available is None and latest_version:
+            status_label = f"Latest release: {latest_version}"
+
+        return {
+            "repo_url": app.config.get("REPO_URL", "https://github.com/Dodelidoo-Labs/sonobarr"),
+            "app_version": current_version,
+            "latest_release_version": latest_version,
+            "latest_release_url": release_info.get("html_url")
+            or "https://github.com/Dodelidoo-Labs/sonobarr/releases",
+            "update_available": update_available,
+            "update_status_color": status_color,
+            "update_status_label": status_label,
+        }
+
+    return data_handler
+
+
+def _run_database_initialisation(app: Flask, data_handler: DataHandler) -> None:
+    with app.app_context():
+        db.create_all()
+        _ensure_user_profile_columns(app.logger)
+        bootstrap_super_admin(app.logger, data_handler)
+
+
 def _ensure_user_profile_columns(logger: logging.Logger) -> None:
     """Backfill the user listening columns if migrations have not run yet."""
 
