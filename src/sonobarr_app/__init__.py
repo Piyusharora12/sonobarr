@@ -66,7 +66,6 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     app.config.from_object(config_class)
 
     _configure_logging(app)
-    _configure_swagger(app)
 
     # Core extensions -------------------------------------------------
     db.init_app(app)
@@ -151,6 +150,9 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(api_bp, url_prefix="/api")
+    
+    # Swagger must be initialized AFTER blueprints are registered
+    _configure_swagger(app)
 
     # Socket.IO -------------------------------------------------------
     register_socketio_handlers(socketio, data_handler)
