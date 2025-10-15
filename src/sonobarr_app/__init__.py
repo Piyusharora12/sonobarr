@@ -27,9 +27,18 @@ def _configure_swagger(app: Flask) -> None:
                 "route": "/api/docs.json",
             }
         ],
-        "static_url_path": "/flaggger_static",
+        "static_url_path": "/flasgger_static",
         "swagger_ui": True,
         "specs_route": "/api/docs/",
+        "swagger_ui_config": {
+            "displayOperationId": False,
+            "defaultModelsExpandDepth": 0,
+            "displayRequestDuration": True,
+            "deepLinking": True,
+            "filter": False,
+            "showExtensions": False,
+            "showCommonExtensions": False,
+        }
     }
     
     swagger_template = {
@@ -66,84 +75,10 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     app.config.from_object(config_class)
 
     _configure_logging(app)
-
-    # Core extensions -------------------------------------------------
-    db.init_app(app)
-    migrate.init_app(app, db)
-    login_manager.init_app(app)
-    login_manager.login_view = "auth.login"
-    login_manager.login_message = "Please log in to access Sonobarr."
-    login_manager.login_message_category = "warning"
-    csrf.init_app(app)
-    socketio.init_app(app, async_mode="gevent")
-
-    from .models import User  # Imported lazily to avoid circular imports
-
-    @login_manager.user_loader
-    def load_user(user_id: str) -> Optional[User]:
-        if not user_id:
-            return None
-        try:
-            return User.query.get(int(user_id))
-        except (TypeError, ValueError):
-            return None
-        except (OperationalError, ProgrammingError) as exc:
-            current_app.logger.warning(
-                "Database schema not ready when loading user %s: %s", user_id, exc
-            )
-            db.session.rollback()
-            return None
-
-    # Services --------------------------------------------------------
-    data_handler = DataHandler(socketio=socketio, logger=app.logger, app_config=app.config)
-    release_client = ReleaseClient(
-        repo=app.config.get("GITHUB_REPO", "Dodelidoo-Labs/sonobarr"),
-        user_agent=app.config.get("GITHUB_USER_AGENT", "sonobarr-app"),
-        ttl_seconds=int(app.config.get("RELEASE_CACHE_TTL_SECONDS", 3600)),
-        logger=app.logger,
-    )
-
-    data_handler.set_flask_app(app)
-    app.extensions["data_handler"] = data_handler
-    app.extensions["release_client"] = release_client
-
-    @app.context_processor
-    def inject_footer_metadata() -> Dict[str, Any]:
-        current_version = (app.config.get("APP_VERSION") or "unknown").strip() or "unknown"
-        release_info = release_client.fetch_latest()
-        latest_version = release_info.get("tag_name")
-        update_available: Optional[bool]
-        status_color = "muted"
-
-        if latest_version and current_version.lower() not in {"", "unknown", "dev", "development"}:
-            update_available = latest_version != current_version
-            status_color = "danger" if update_available else "success"
-        elif latest_version:
-            update_available = None
-        else:
-            update_available = None
-
-        if release_info.get("error") and not latest_version:
-            status_color = "muted"
-
-        status_label = "Update status unavailable"
-        if update_available is True and latest_version:
-            status_label = f"Update available · {latest_version}"
-        elif update_available is False:
-            status_label = "Up to date"
-        elif update_available is None and latest_version:
-            status_label = f"Latest release: {latest_version}"
-
-        return {
-            "repo_url": app.config.get("REPO_URL", "https://github.com/Dodelidoo-Labs/sonobarr"),
-            "app_version": current_version,
-            "latest_release_version": latest_version,
-            "latest_release_url": release_info.get("html_url")
-            or "https://github.com/Dodelidoo-Labs/sonobarr/releases",
-            "update_available": update_available,
-            "update_status_color": status_color,
-            "update_status_label": status_label,
-        }
+    _init_core_extensions(app)
+    _register_user_loader()
+    
+    data_handler = _initialize_services(app)
 
     # Blueprints ------------------------------------------------------
     app.register_blueprint(main_bp)
@@ -158,10 +93,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     register_socketio_handlers(socketio, data_handler)
 
     # Database initialisation ----------------------------------------
-    with app.app_context():
-        db.create_all()
-        _ensure_user_profile_columns(app.logger)
-        bootstrap_super_admin(app.logger, data_handler)
+    _run_database_initialisation(app, data_handler)
 
     return app
 
@@ -246,32 +178,24 @@ def _initialize_services(app: Flask) -> DataHandler:
     app.extensions["data_handler"] = data_handler
     app.extensions["release_client"] = release_client
 
+    _register_footer_metadata(app, release_client)
+
+    return data_handler
+
+
+def _register_footer_metadata(app: Flask, release_client: ReleaseClient) -> None:
+    """Register context processor for footer metadata (version info, update status)."""
+    
     @app.context_processor
     def inject_footer_metadata() -> Dict[str, Any]:
         current_version = (app.config.get("APP_VERSION") or "unknown").strip() or "unknown"
         release_info = release_client.fetch_latest()
         latest_version = release_info.get("tag_name")
-        update_available: Optional[bool]
-        status_color = "muted"
-
-        if latest_version and current_version.lower() not in {"", "unknown", "dev", "development"}:
-            update_available = latest_version != current_version
-            status_color = "danger" if update_available else "success"
-        elif latest_version:
-            update_available = None
-        else:
-            update_available = None
-
-        if release_info.get("error") and not latest_version:
-            status_color = "muted"
-
-        status_label = "Update status unavailable"
-        if update_available is True and latest_version:
-            status_label = f"Update available · {latest_version}"
-        elif update_available is False:
-            status_label = "Up to date"
-        elif update_available is None and latest_version:
-            status_label = f"Latest release: {latest_version}"
+        
+        update_available, status_color = _calculate_update_status(
+            current_version, latest_version, release_info.get("error")
+        )
+        status_label = _get_update_status_label(update_available, latest_version)
 
         return {
             "repo_url": app.config.get("REPO_URL", "https://github.com/Dodelidoo-Labs/sonobarr"),
@@ -284,7 +208,35 @@ def _initialize_services(app: Flask) -> DataHandler:
             "update_status_label": status_label,
         }
 
-    return data_handler
+
+def _calculate_update_status(
+    current_version: str, latest_version: Optional[str], has_error: bool
+) -> tuple[Optional[bool], str]:
+    """Calculate if update is available and determine status color."""
+    if not latest_version:
+        return None, "muted"
+    
+    if current_version.lower() in {"", "unknown", "dev", "development"}:
+        return None, "muted"
+    
+    update_available = latest_version != current_version
+    status_color = "danger" if update_available else "success"
+    
+    if has_error and not latest_version:
+        status_color = "muted"
+    
+    return update_available, status_color
+
+
+def _get_update_status_label(update_available: Optional[bool], latest_version: Optional[str]) -> str:
+    """Get human-readable update status label."""
+    if update_available is True and latest_version:
+        return f"Update available · {latest_version}"
+    if update_available is False:
+        return "Up to date"
+    if update_available is None and latest_version:
+        return f"Latest release: {latest_version}"
+    return "Update status unavailable"
 
 
 def _run_database_initialisation(app: Flask, data_handler: DataHandler) -> None:
